@@ -14,12 +14,13 @@ export const fetchAvailablePartners = createAsyncThunk(
     }
   }
 );
-
 export const fetchAllPartners = createAsyncThunk(
   'deliveryPartners/fetchAll',
   async (_, thunkAPI) => {
     try {
-      const res = await API.get('/delivery-partners/all');
+      const res = await API.get('/delivery-partners/all', {
+        withCredentials: false, // 👈 Explicitly avoid sending cookies
+      });
       return res.data.data.partners;
     } catch (err) {
       return thunkAPI.rejectWithValue(
@@ -28,6 +29,8 @@ export const fetchAllPartners = createAsyncThunk(
     }
   }
 );
+
+
 
 export const fetchPartnerById = createAsyncThunk(
   'deliveryPartners/fetchById',
@@ -63,7 +66,9 @@ export const updatePartner = createAsyncThunk(
   'deliveryPartners/update',
   async ({ id, formData }, thunkAPI) => {
     try {
-      const res = await API.put(`/delivery-partners/${id}`, formData);
+      const res = await API.put(`/delivery-partners/${id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       return res.data.data;
     } catch (err) {
       return thunkAPI.rejectWithValue(

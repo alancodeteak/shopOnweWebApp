@@ -23,21 +23,21 @@ export default function OrderCard({ order, fromOngoing, paymentVerifiedLabel, sh
   return (
     <div
       onClick={handleClick}
-      className="bg-white border shadow-md rounded-xl p-4 mb-4 relative w-full cursor-pointer hover:shadow-lg transition-shadow"
+      className="bg-white border shadow-md rounded-xl p-3 sm:p-4 mb-3 sm:mb-4 relative w-full cursor-pointer hover:shadow-lg transition-shadow"
     >
       {/* Top row */}
-      <div className="flex justify-between items-center text-sm font-medium">
+      <div className="flex justify-between items-center text-xs sm:text-sm font-medium">
         <div className="flex items-center gap-2">
           <span className="text-black">Bill No: {order.bill_no}</span>
           <button onClick={copyBillNo} className="p-1 rounded-full hover:bg-gray-100">
-            <Copy className="w-4 h-4 text-gray-500 hover:text-blue-600 transition" />
+            <Copy className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 hover:text-blue-600 transition" />
           </button>
         </div>
-        <div className="flex flex-col items-end gap-1 min-w-[90px]">
+        <div className="flex flex-col items-end gap-1 min-w-[80px] sm:min-w-[90px]">
           <span className={
             order.order_status === 'Completed' || order.order_status === 'Delivered'
-              ? 'bg-green-100 text-green-600 text-xs px-2 py-1 rounded'
-              : 'bg-red-100 text-red-600 text-xs px-2 py-1 rounded'
+              ? 'bg-green-100 text-green-600 text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded'
+              : 'bg-red-100 text-red-600 text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded'
           }>
             {order.order_status === 'Completed' || order.order_status === 'Delivered' ? 'Completed' : 'Assigned'}
           </span>
@@ -56,28 +56,28 @@ export default function OrderCard({ order, fromOngoing, paymentVerifiedLabel, sh
         </div>
       </div>
       {/* Middle */}
-      <div className="mt-2">
-        <h2 className="text-xl font-bold text-black">{order.customer_name || 'test'}</h2>
-        <p className="text-sm text-gray-500">
+      <div className="mt-2 sm:mt-2">
+        <h2 className="text-lg sm:text-xl font-bold text-black">{order.customer_name || 'test'}</h2>
+        <p className="text-xs sm:text-sm text-gray-500">
           {new Date(order.created_at).toLocaleString()}
         </p>
       </div>
       {/* Call icon */}
-      <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+      <div className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2">
         <button
           onClick={(e) => {
             e.stopPropagation();
             console.log('Calling...');
             toast.info('Calling feature coming soon!');
           }}
-          className="bg-green-100 text-green-600 p-2 rounded-full hover:bg-green-200 transition"
+          className="bg-green-100 text-green-600 p-1.5 sm:p-2 rounded-full hover:bg-green-200 transition"
         >
-          <Phone size={16} />
+          <Phone size={14} className="sm:w-4 sm:h-4" />
         </button>
       </div>
       {/* Bottom */}
       <button
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 px-4 rounded-lg mt-4 transition"
+        className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold py-2 px-3 sm:px-4 rounded-lg mt-3 sm:mt-4 transition"
       >
        Order Details →
       </button>

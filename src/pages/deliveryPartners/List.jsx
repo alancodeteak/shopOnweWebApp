@@ -5,6 +5,16 @@ import { RefreshCw, Plus, Home, Package, Users, ClipboardList } from 'lucide-rea
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
 
+// Helper function to construct proper image URLs
+const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  // If it's a relative path, construct the full URL
+  return `${import.meta.env.VITE_API_BASE_URL}${imagePath}`;
+};
+
 export default function DeliveryPartnerList() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -92,7 +102,7 @@ export default function DeliveryPartnerList() {
               </button>
             </div>
             <img
-              src={partner.photo || 'https://ui-avatars.com/api/?name=DP'}
+              src={getImageUrl(partner.photo_url) || 'https://ui-avatars.com/api/?name=DP'}
               alt={partner.first_name}
               className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border ml-2 flex-shrink-0"
               onError={e => { e.target.onerror = null; e.target.src = 'https://ui-avatars.com/api/?name=DP'; }}

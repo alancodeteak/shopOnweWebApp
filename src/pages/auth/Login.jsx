@@ -69,7 +69,7 @@ export default function Login() {
       {/* Top Section: Logo and Illustration */}
       <div className="flex flex-col items-center pt-12 pb-4">
         {/* Yaadro Logo */}
-        <img src="/assets/Yadro-logo.png" alt="Yaadro Logo" className="w-32 h-32 object-contain mb-2" style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.08))' }} />
+        <img src="assets/Yadro-logo.png" alt="Yaadro Logo" className="w-32 h-32 object-contain mb-2" style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.08))' }} />
       </div>
       {/* Login Card */}
       <div className="w-full flex-1 flex flex-col justify-end">

@@ -27,6 +27,16 @@ API.interceptors.request.use((config) => {
     console.warn("⚠️ No token found in localStorage");
   }
 
+  // Final safeguard: Remove any Clear-Site-Data header (case-insensitive)
+  Object.keys(config.headers).forEach((key) => {
+    if (key.toLowerCase() === 'clear-site-data') {
+      delete config.headers[key];
+      if (import.meta.env.DEV) {
+        console.warn(`🚫 Removed Clear-Site-Data header: ${key}`);
+      }
+    }
+  });
+
   return config;
 });
 

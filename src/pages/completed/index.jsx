@@ -25,7 +25,7 @@ function CompletedTabBar({ activeTab, setActiveTab, pillSize }) {
     : 'px-5 py-3 rounded-full text-base';
 
   return (
-    <div className="flex justify-between gap-2 mb-4 w-full max-w-xs mx-auto">
+    <div className="flex justify-between gap-2 mt-4 mb-4 w-full max-w-xs mx-auto">
       {[
         { name: 'All', count: completedOrders?.length || 0 },
         { name: 'Verified', count: verifiedCount },

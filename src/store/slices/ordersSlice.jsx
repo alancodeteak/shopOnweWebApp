@@ -1,6 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import API from "../../api/axios";
-import axios from '@/api/axios';
 // THUNKS
 export const fetchOrdersByStatus = createAsyncThunk(
   'orders/fetchByStatus',
@@ -172,7 +171,7 @@ export const updateCustomerAddress = createAsyncThunk(
   'orders/updateCustomerAddress',
   async ({ customer_name, customer_phone_number, address }, { rejectWithValue }) => {
     try {
-      const response = await axios.put(
+      const response = await API.put(
         `/customer-order-address/`,
         { customer_name, customer_phone_number, address }
       );
@@ -191,7 +190,7 @@ export const updateOrderStatusByShopOwner = createAsyncThunk(
       if (status === 'Cancelled' && cancellation_reason) {
         body.cancellation_reason = cancellation_reason;
       }
-      const response = await axios.put(
+      const response = await API.put(
         `/orders/shop-owner/status/${order_id}`,
         body
       );
