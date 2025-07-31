@@ -1,6 +1,9 @@
-import { Phone, Copy, CheckCircle, XCircle } from 'lucide-react';
+import { Phone, Copy, CheckCircle, XCircle, Droplets } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import Card from '@/components/Card';
+import StatusBadge from '@/components/StatusBadge';
+import { isWaterNeeded } from '@/utils/orderUtils';
 
 export default function OrderCard({ order, fromOngoing, paymentVerifiedLabel, showPaymentStatusBadge }) {
   const navigate = useNavigate();
@@ -20,10 +23,14 @@ export default function OrderCard({ order, fromOngoing, paymentVerifiedLabel, sh
     }
   };
 
+  const getStatusText = () => {
+    return order.order_status === 'Completed' || order.order_status === 'Delivered' ? 'Completed' : 'Assigned';
+  };
+
   return (
-    <div
+    <Card
       onClick={handleClick}
-      className="bg-white border shadow-md rounded-xl p-3 sm:p-4 mb-3 sm:mb-4 relative w-full cursor-pointer hover:shadow-lg transition-shadow"
+      className="p-3 sm:p-4 mb-3 sm:mb-4 relative w-full"
     >
       {/* Top row */}
       <div className="flex justify-between items-center text-xs sm:text-sm font-medium">
@@ -34,25 +41,15 @@ export default function OrderCard({ order, fromOngoing, paymentVerifiedLabel, sh
           </button>
         </div>
         <div className="flex flex-col items-end gap-1 min-w-[80px] sm:min-w-[90px]">
-          <span className={
-            order.order_status === 'Completed' || order.order_status === 'Delivered'
-              ? 'bg-green-100 text-green-600 text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded'
-              : 'bg-red-100 text-red-600 text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded'
-          }>
-            {order.order_status === 'Completed' || order.order_status === 'Delivered' ? 'Completed' : 'Assigned'}
-          </span>
-          {/* Payment Verified/Not Verified badge for completed orders */}
-          {/* {showPaymentStatusBadge && (
-            paymentVerifiedLabel ? (
-              <span className="bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full z-10 shadow mt-1">
-                Verified
-              </span>
-            ) : (
-              <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full z-10 shadow mt-1">
-                Not Verified
-              </span>
-            )
-          )} */}
+          <StatusBadge status={getStatusText()} size="sm" />
+          {/* Debug: Log water value */}
+          {console.log('🌊 OrderCard water:', order.water, typeof order.water, 'isWaterNeeded:', isWaterNeeded(order.water))}
+          {isWaterNeeded(order.water) && (
+            <div className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-semibold">
+              <Droplets className="w-3 h-3" />
+              <span>Water</span>
+            </div>
+          )}
         </div>
       </div>
       {/* Middle */}
@@ -81,6 +78,6 @@ export default function OrderCard({ order, fromOngoing, paymentVerifiedLabel, sh
       >
        Order Details →
       </button>
-    </div>
+    </Card>
   );
 }

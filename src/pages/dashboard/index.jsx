@@ -1,124 +1,137 @@
 // src/pages/Dashboard.jsx
-import React, { useEffect, useState, useCallback } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { toast } from 'react-toastify';
+import React, { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
 import TabBar from '@/components/Topbar';
 import OrderCard from '@/components/OrderCard';
-import { fetchOrdersByStatus } from '@/store/slices/ordersSlice';
 import AppSpinner from '@/components/AppSpinner';
 import ErrorMessage from '@/components/ErrorMessage';
 import TicketCard from '@/components/TicketCard';
-import { fetchOpenTickets, ticketAction } from '@/store/slices/ticketsSlice';
 import PageHeader from '@/components/PageHeader';
+import PageContainer from '@/components/PageContainer';
+import EmptyState from '@/components/EmptyState';
+import { Package, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useOrders, useTickets } from '@/hooks';
 
 export default function Dashboard() {
-  const dispatch = useDispatch();
   const [activeTab, setActiveTab] = useState('Ongoing');
   const shopId = useSelector((state) => state.auth.user?.shopId);
 
-  // New Orders
-  const newOrders = useSelector((state) => state.orders.newOrders);
-  const newOrdersLoading = useSelector((state) => state.orders.newOrdersLoading);
-  const newOrdersError = useSelector((state) => state.orders.newOrdersError);
+  // Use specialized hooks
+  const {
+    newOrders,
+    newOrdersLoading,
+    newOrdersError,
+    ongoingOrders,
+    ongoingOrdersLoading,
+    ongoingOrdersError,
+    completedOrders,
+    completedOrdersLoading,
+    completedOrdersError,
+  } = useOrders(shopId);
 
-  // Ongoing Orders
-  const ongoingOrders = useSelector((state) => state.orders.ongoingOrders);
-  const ongoingOrdersLoading = useSelector((state) => state.orders.ongoingOrdersLoading);
-  const ongoingOrdersError = useSelector((state) => state.orders.ongoingOrdersError);
+  const {
+    tickets,
+    ticketsLoading,
+    ticketsError,
+    acceptTicket,
+    rejectTicket,
+    callPartner,
+  } = useTickets();
 
-  // Completed Orders
-  const completedOrders = useSelector((state) => state.orders.completedOrders);
-  const completedOrdersLoading = useSelector((state) => state.orders.completedOrdersLoading);
-  const completedOrdersError = useSelector((state) => state.orders.completedOrdersError);
-
-  // Tickets
-  const tickets = useSelector((state) => state.tickets.list);
-  const ticketsLoading = useSelector((state) => state.tickets.loading);
-  const ticketsError = useSelector((state) => state.tickets.error);
-
-  useEffect(() => {
-    if (shopId) {
-      dispatch(fetchOrdersByStatus({ shopId, status: 'new' }));
-      dispatch(fetchOrdersByStatus({ shopId, status: 'ongoing' }));
-      dispatch(fetchOrdersByStatus({ shopId, status: 'completed' }));
-    }
-  }, [dispatch, shopId]);
-
+  // Load tickets when tab is active
   useEffect(() => {
     if (activeTab === 'Tickets') {
-      dispatch(fetchOpenTickets());
+      // Tickets are loaded automatically by the hook
     }
-  }, [activeTab, dispatch]);
+  }, [activeTab]);
 
-  const handleAccept = (ticketId, notes) => {
-    dispatch(ticketAction({ ticketId, action: 'accept', resolution_notes: notes || '' }));
-  };
-  const handleReject = (ticketId, notes) => {
-    dispatch(ticketAction({ ticketId, action: 'reject', resolution_notes: notes || '' }));
-  };
-  const handleCall = (phone) => {
-    window.open(`tel:${phone}`);
+  const renderOrdersList = (orders, loading, error, emptyMessage, icon) => {
+    if (loading) return <AppSpinner label={`Loading ${activeTab.toLowerCase()}...`} />;
+    if (error) return <ErrorMessage message={error} />;
+    if (!orders?.length) {
+      return (
+        <EmptyState
+          icon={icon}
+          title={emptyMessage}
+          description={`No ${activeTab.toLowerCase()} at the moment.`}
+        />
+      );
+    }
+    return (
+      <div className="space-y-3">
+        {orders.map((order) => (
+          <OrderCard 
+            key={order.order_id} 
+            order={order} 
+            fromOngoing={activeTab === 'Ongoing'}
+          />
+        ))}
+      </div>
+    );
   };
 
   return (
-    <div className="min-h-screen bg-white w-full max-w-screen-md mx-auto px-4 pt-16 pb-24">
+    <PageContainer>
       <PageHeader title="Dashboard" />
       <TabBar activeTab={activeTab} setActiveTab={setActiveTab} pillSize="small" />
 
-      {activeTab === 'New Orders' && (
-        <>
-          {newOrdersLoading && <AppSpinner label="Loading new orders..." />}
-          {newOrdersError && <ErrorMessage message={newOrdersError} />}
-          {newOrders?.length > 0 ? (
-            <div className="space-y-3">
-              {newOrders.map((order) => <OrderCard key={order.order_id} order={order} />)}
-            </div>
-          ) : (
-            !newOrdersLoading && !newOrdersError && <div className="text-center text-gray-400 mt-12">No new orders.</div>
-          )}
-        </>
-      )}
+      {activeTab === 'New Orders' && 
+        renderOrdersList(
+          newOrders, 
+          newOrdersLoading, 
+          newOrdersError, 
+          'No New Orders', 
+          Package
+        )
+      }
 
-      {activeTab === 'Ongoing' && (
-        <>
-          {ongoingOrdersLoading && <AppSpinner label="Loading ongoing orders..." />}
-          {ongoingOrdersError && <ErrorMessage message={ongoingOrdersError} />}
-          {ongoingOrders?.length > 0 ? (
-            <div className="space-y-3">
-              {ongoingOrders.map((order) => <OrderCard key={order.order_id} order={order} fromOngoing />)}
-            </div>
-          ) : (
-            !ongoingOrdersLoading && !ongoingOrdersError && <div className="text-center text-gray-400 mt-12">No ongoing orders.</div>
-          )}
-        </>
-      )}
+      {activeTab === 'Ongoing' && 
+        renderOrdersList(
+          ongoingOrders, 
+          ongoingOrdersLoading, 
+          ongoingOrdersError, 
+          'No Ongoing Orders', 
+          Clock
+        )
+      }
+
+      {activeTab === 'Completed' && 
+        renderOrdersList(
+          completedOrders, 
+          completedOrdersLoading, 
+          completedOrdersError, 
+          'No Completed Orders', 
+          CheckCircle
+        )
+      }
 
       {activeTab === 'Tickets' && (
         <>
           {ticketsLoading && <AppSpinner label="Loading tickets..." />}
           {ticketsError && <ErrorMessage message={ticketsError} />}
           {tickets?.length > 0 ? (
-            tickets.map((ticket) => (
-              <TicketCard
-                key={ticket.id}
-                ticket={ticket}
-                onAccept={handleAccept}
-                onReject={handleReject}
-                onCall={handleCall}
-                openIconClass="text-green-500"
-              />
-            ))
+            <div className="space-y-3">
+              {tickets.map((ticket) => (
+                <TicketCard
+                  key={ticket.id}
+                  ticket={ticket}
+                  onAccept={acceptTicket}
+                  onReject={rejectTicket}
+                  onCall={callPartner}
+                />
+              ))}
+            </div>
           ) : (
-            !ticketsLoading && !ticketsError && <div className="text-center text-gray-400 mt-12">No open tickets.</div>
+            !ticketsLoading && !ticketsError && (
+              <EmptyState
+                icon={AlertTriangle}
+                title="No Tickets"
+                description="No open tickets at the moment."
+              />
+            )
           )}
         </>
       )}
-      
-      {/* Powered by Codeteak */}
-      <div className="flex flex-col items-center mt-12 mb-4">
-        <span className="text-xs text-blue-500 mb-1">Powered by</span>
-        <img src="/assets/codeteak-logo.png" alt="Codeteak Logo" className="h-4 object-contain mt-1 md:mt-2" />
-      </div>
-    </div>
+    </PageContainer>
   );
 }

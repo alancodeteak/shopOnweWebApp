@@ -16,10 +16,32 @@ export const fetchOrdersByStatus = createAsyncThunk(
       const endpoint = getEndpointForStatus(status, shopId, page, limit);
       console.log(`Fetching ${status} orders from: ${endpoint}`);
       const res = await API.get(endpoint);
+      
+      // Debug: Log the response data to see if water field is present
+      console.log(`🌊 ${status} orders API response:`, res.data);
+      if (res.data.data && Array.isArray(res.data.data)) {
+        console.log(`🌊 First ${status} order:`, res.data.data[0]);
+        console.log(`🌊 ${status} orders water field check:`, res.data.data.map(order => ({ 
+          order_id: order.order_id, 
+          water: order.water, 
+          has_water: 'water' in order 
+        })));
+      }
       if (status === 'completed') {
-        // API returns { data: Array, ... }
+        // API returns { data: { orders: Array, page: number, totalPages: number } }
+        const completedOrders = Array.isArray(res.data.data.orders) ? res.data.data.orders : [];
+        
+        // Debug: Log completed orders data
+        console.log(`🌊 Completed orders API response:`, res.data);
+        console.log(`🌊 First completed order:`, completedOrders[0]);
+        console.log(`🌊 Completed orders water field check:`, completedOrders.map(order => ({ 
+          order_id: order.order_id, 
+          water: order.water, 
+          has_water: 'water' in order 
+        })));
+        
         return {
-          data: Array.isArray(res.data.data) ? res.data.data : [],
+          data: completedOrders,
           page: res.data.data.page || page,
           totalPages: res.data.data.totalPages || 1,
           status,
@@ -156,9 +178,23 @@ export const createOrder = createAsyncThunk(
   "orders/create",
   async (orderPayload, thunkAPI) => {
     try {
+      // Debug: Log what's being sent to the API
+      console.log('🌊 Creating order with payload:', orderPayload);
+      if (orderPayload instanceof FormData) {
+        console.log('🌊 FormData entries:');
+        for (let [key, value] of orderPayload.entries()) {
+          console.log(`  ${key}:`, value);
+        }
+      }
+      
       const res = await API.post(`/orders/create`, orderPayload);
+      
+      // Debug: Log what's returned from the API
+      console.log('🌊 Order created successfully:', res.data.data);
+      
       return res.data.data;
     } catch (err) {
+      console.error('🌊 Error creating order:', err);
       return thunkAPI.rejectWithValue(
         err?.response?.data?.message || "Failed to create order"
       );
@@ -178,6 +214,20 @@ export const updateCustomerAddress = createAsyncThunk(
       return response.data;
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to update address');
+    }
+  }
+);
+
+// --- Fetch Customer By Phone Thunk ---
+export const fetchCustomerByPhone = createAsyncThunk(
+  'orders/fetchCustomerByPhone',
+  async (phone, { rejectWithValue }) => {
+    try {
+      const response = await API.get(`/customer-order-address/${phone}`);
+      // Extract customer data from the nested response structure
+      return response.data.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || 'Customer not found');
     }
   }
 );
@@ -227,6 +277,12 @@ const initialState = {
   updateOrderStatusLoading: false,
   updateOrderStatusError: null,
   updateOrderStatusSuccess: false,
+  // Customer search state
+  customerSearch: {
+    data: null,
+    loading: false,
+    error: null,
+  },
 };
 
 const ordersSlice = createSlice({
@@ -245,6 +301,13 @@ const ordersSlice = createSlice({
         state.current.is_urgent = is_urgent;
       }
     },
+    clearCustomerSearch: (state) => {
+      state.customerSearch = {
+        data: null,
+        loading: false,
+        error: null,
+      };
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -262,6 +325,13 @@ const ordersSlice = createSlice({
           page: action.payload.page || 1,
           totalPages: action.payload.totalPages || 1,
         };
+        
+        // Debug: Log the first order to see what fields are available
+        if (state.list.length > 0) {
+          console.log('🌊 First order from API:', state.list[0]);
+          console.log('🌊 Available fields:', Object.keys(state.list[0]));
+          console.log('🌊 Water field value:', state.list[0].water);
+        }
       })
       .addCase(fetchOrders.rejected, (state, action) => {
         state.loading = false;
@@ -297,6 +367,11 @@ const ordersSlice = createSlice({
       .addCase(fetchOrderById.fulfilled, (state, action) => {
         state.loading = false;
         state.current = action.payload;
+        
+        // Debug: Log the order details to see what fields are available
+        console.log('🌊 Order details from API:', action.payload);
+        console.log('🌊 Available fields:', Object.keys(action.payload));
+        console.log('🌊 Water field value:', action.payload.water);
       })
       .addCase(fetchOrderById.rejected, (state, action) => {
         state.loading = false;
@@ -449,11 +524,28 @@ const ordersSlice = createSlice({
         state.updateOrderStatusLoading = false;
         state.updateOrderStatusError = action.payload || 'Failed to update order status';
         state.updateOrderStatusSuccess = false;
+      })
+
+      // Fetch Customer By Phone
+      .addCase(fetchCustomerByPhone.pending, (state) => {
+        state.customerSearch.loading = true;
+        state.customerSearch.error = null;
+        state.customerSearch.data = null;
+      })
+      .addCase(fetchCustomerByPhone.fulfilled, (state, action) => {
+        state.customerSearch.loading = false;
+        state.customerSearch.data = action.payload;
+        state.customerSearch.error = null;
+      })
+      .addCase(fetchCustomerByPhone.rejected, (state, action) => {
+        state.customerSearch.loading = false;
+        state.customerSearch.error = action.payload || 'Customer not found';
+        state.customerSearch.data = null;
       });
   },
 });
 
-export const { clearCurrentOrder, clearCreatedOrder, updateUrgencyLocal } =
+export const { clearCurrentOrder, clearCreatedOrder, updateUrgencyLocal, clearCustomerSearch } =
   ordersSlice.actions;
 
 export default ordersSlice.reducer;

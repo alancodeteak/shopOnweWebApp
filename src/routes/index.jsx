@@ -11,6 +11,7 @@ import CreateDeliveryPartner from "../pages/deliveryPartners/Create";
 import DeliveryPartnerDetails from "../pages/deliveryPartners/Details";
 import CompletedOrders from "../pages/completed";
 import Profile from "../pages/profile";
+import Promotions from "../pages/promotions";
 import Login from "../pages/auth/Login";
 import PrivateRoute from "./PrivateRoute";
 import Analytics from "../pages/dashboard/Analytics";
@@ -37,6 +38,7 @@ const router = createBrowserRouter([
       { path: "delivery-partners/:id/edit", element: <DeliveryPartnerDetails /> },
       { path: "completed", element: <CompletedOrders /> },
       { path: "profile", element: <Profile /> },
+      { path: "promotions", element: <Promotions /> },
       { path: "", element: <Dashboard /> },
     ],
   },

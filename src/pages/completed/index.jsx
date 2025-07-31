@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchOrdersByStatus } from '@/store/slices/ordersSlice';
@@ -6,6 +6,7 @@ import OrderCard from '@/components/OrderCard';
 import AppSpinner from '@/components/AppSpinner';
 import ErrorMessage from '@/components/ErrorMessage';
 import PageHeader from '@/components/PageHeader';
+import { OrderSearchInput } from '@/components/forms';
 import { RefreshCw } from 'lucide-react';
 import { updateCustomerAddress } from '@/store/slices/ordersSlice';
 import toast from 'react-hot-toast';
@@ -70,27 +71,44 @@ export default function CompletedOrders() {
   const updateLoading = useSelector((state) => state.orders.updateCustomerAddressLoading);
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const limit = 20;
 
-  // Filter orders based on active tab
-  const getFilteredOrders = () => {
+  // Filter orders based on active tab and search query
+  const filteredOrders = useMemo(() => {
     if (!completedOrders) return [];
     
+    let filtered = completedOrders;
+    
+    // Filter by tab
     switch (activeTab) {
       case 'Verified':
-        return completedOrders.filter(order => 
+        filtered = filtered.filter(order => 
           order.payment_verification !== true && order.payment_verification !== 'true'
         );
+        break;
       case 'Non-verified':
-        return completedOrders.filter(order => 
+        filtered = filtered.filter(order => 
           order.payment_verification === true || order.payment_verification === 'true'
         );
+        break;
       default:
-        return completedOrders;
+        break;
     }
-  };
-
-  const filteredOrders = getFilteredOrders();
+    
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(order => 
+        order.customer_name?.toLowerCase().includes(query) ||
+        order.customer_phone_number?.includes(query) ||
+        order.order_id?.toString().includes(query) ||
+        order.bill_no?.toLowerCase().includes(query)
+      );
+    }
+    
+    return filtered;
+  }, [completedOrders, activeTab, searchQuery]);
 
   const handleRefresh = () => {
     if (shopId) dispatch(fetchOrdersByStatus({ shopId, status: 'completed', page: currentPage, limit }));
@@ -149,6 +167,16 @@ export default function CompletedOrders() {
       </PageHeader>
       
       <CompletedTabBar activeTab={activeTab} setActiveTab={setActiveTab} pillSize="small" />
+      
+      {/* Search Bar */}
+      <div className="mb-6">
+        <OrderSearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          onClear={() => setSearchQuery('')}
+          placeholder="Search by customer name, phone, or order ID..."
+        />
+      </div>
       
       {loading && <AppSpinner label="Loading completed orders..." />}
       {error && <ErrorMessage message={error} />}

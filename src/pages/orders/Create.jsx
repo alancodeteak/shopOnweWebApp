@@ -1,10 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { createOrder, clearCreatedOrder } from '@/store/slices/ordersSlice';
+import { createOrder, clearCreatedOrder, fetchCustomerByPhone, clearCustomerSearch } from '@/store/slices/ordersSlice';
 import { toast } from 'react-toastify';
-import { ArrowLeft, Camera, Search, Plus, Trash2, Loader2 } from 'lucide-react';
+import { Camera, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
+import PageContainer from '@/components/PageContainer';
+import { 
+  FormInput, 
+  FormTextarea, 
+  FormButton, 
+  PhoneSearchInput, 
+  OrderItemsList, 
+  UrgencyToggle, 
+  WaterNeedToggle,
+  ImageUpload 
+} from '@/components/forms';
 
 export default function CreateOrder() {
   const dispatch = useDispatch();
@@ -12,6 +23,7 @@ export default function CreateOrder() {
   const shopId = useSelector((state) => state.auth.user?.shopId);
   const loading = useSelector((state) => state.orders.loading);
   const error = useSelector((state) => state.orders.error);
+  const customerSearch = useSelector((state) => state.orders.customerSearch);
 
   // Form state
   const [phone, setPhone] = useState('');
@@ -23,9 +35,67 @@ export default function CreateOrder() {
   ]);
   const [totalAmount, setTotalAmount] = useState('');
   const [urgency, setUrgency] = useState('Normal');
+  const [waterNeed, setWaterNeed] = useState('No');
   const [billImage, setBillImage] = useState(null);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [errors, setErrors] = useState({});
+
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    (() => {
+      let timeoutId;
+      return (phoneNumber) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          if (phoneNumber && phoneNumber.length === 10) {
+            dispatch(fetchCustomerByPhone(phoneNumber));
+          }
+        }, 500);
+      };
+    })(),
+    [dispatch]
+  );
+
+  // Handle phone number change with debounced search
+  const handlePhoneChange = (value) => {
+    const cleanPhone = value.replace(/\D/g, '').slice(0, 10);
+    setPhone(cleanPhone);
+    
+    // Clear previous customer data when phone changes
+    if (cleanPhone !== phone) {
+      dispatch(clearCustomerSearch());
+      setCustomerName('');
+      setAddress('');
+    }
+    
+    // Trigger debounced search
+    debouncedSearch(cleanPhone);
+  };
+
+  // Manual search function
+  const handleManualSearch = () => {
+    if (phone && phone.length === 10) {
+      dispatch(fetchCustomerByPhone(phone));
+    } else {
+      toast.error('Please enter a valid 10-digit phone number');
+    }
+  };
+
+  // Auto-populate customer data when search is successful
+  useEffect(() => {
+    if (customerSearch.data && customerSearch.data.customer_name) {
+      setCustomerName(customerSearch.data.customer_name || '');
+      setAddress(customerSearch.data.address || '');
+      toast.success('Customer data found and populated!');
+    }
+  }, [customerSearch.data]);
+
+  // Show error when customer search fails
+  useEffect(() => {
+    if (customerSearch.error && phone.length === 10) {
+      toast.error(customerSearch.error);
+    }
+  }, [customerSearch.error, phone]);
 
   // Calculate total from items
   const calcTotal = () => {
@@ -83,13 +153,6 @@ export default function CreateOrder() {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  // Handle bill image
-  const handleBillImage = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setBillImage(e.target.files[0]);
-    }
-  };
-
   // Validation
   const validate = () => {
     const errs = {};
@@ -135,6 +198,7 @@ export default function CreateOrder() {
       customer_phone_number: phone,
       special_instructions: specialInstructions,
       urgency,
+      water: waterNeed === 'Yes',
       items: validItems.length > 0 ? validItems.map((item) => ({
         item_name: item.item_name,
         quantity: Number(item.quantity),
@@ -142,12 +206,22 @@ export default function CreateOrder() {
         totalamount: Number(item.totalamount),
       })) : [],
     };
+    
+    // Debug: Log the water value being sent
+    console.log('🌊 Water Need Debug:', {
+      waterNeed: waterNeed,
+      water: waterNeed === 'Yes',
+      payload_water: payload.water
+    });
     // If bill image, use FormData
     if (billImage) {
       const formData = new FormData();
       Object.entries(payload).forEach(([k, v]) => {
         if (k === 'items') {
           formData.append('items', JSON.stringify(v));
+        } else if (k === 'water') {
+          // Ensure water is sent as a string 'true' or 'false' for FormData
+          formData.append(k, v.toString());
         } else {
           formData.append(k, v);
         }
@@ -177,198 +251,133 @@ export default function CreateOrder() {
 
   // UI
   return (
-    <div className="min-h-screen bg-white text-black flex flex-col pt-16 pb-24">
-      <div className="w-full max-w-screen-md mx-auto px-4">
-        <PageHeader title="Add Order" onBack={() => navigate(-1)} />
-        <form
-          className="flex flex-col gap-3 w-full"
-          onSubmit={handleSubmit}
-          autoComplete="off"
-        >
-          {/* Phone */}
-          <div>
-            <label className="block text-sm font-semibold mb-1">Customer Phone Number</label>
-            <div className="relative">
-              <input
-                type="tel"
-                className="w-full rounded-lg px-3 py-2 shadow-sm text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 pr-10"
-                placeholder="Enter phone number"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                maxLength={10}
-              />
-              <Search className="absolute right-3 top-2.5 text-blue-500 w-5 h-5" />
-            </div>
-            {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
-          </div>
-          {/* Name */}
-          <div>
-            <label className="block text-sm font-semibold mb-1">Customer Name</label>
-            <input
-              type="text"
-              className="w-full rounded-lg px-3 py-2 shadow-sm text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
-              placeholder="Enter name"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-            />
-            {errors.customerName && <p className="text-red-500 text-xs mt-1">{errors.customerName}</p>}
-          </div>
-          {/* Address */}
-          <div>
-            <label className="block text-sm font-semibold mb-1">Address</label>
-            <input
-              type="text"
-              className="w-full rounded-lg px-3 py-2 shadow-sm text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
-              placeholder="Enter address"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-            />
-            {errors.address && <p className="text-red-500 text-xs mt-1">{errors.address}</p>}
-          </div>
-          {/* Bill No */}
-          <div>
-            <label className="block text-sm font-semibold mb-1">Bill Number</label>
-            <input
-              type="text"
-              className="w-full rounded-lg px-3 py-2 shadow-sm text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
-              placeholder="Enter bill number"
-              value={billNo}
-              onChange={(e) => setBillNo(e.target.value)}
-            />
-            {errors.billNo && <p className="text-red-500 text-xs mt-1">{errors.billNo}</p>}
-          </div>
-          {/* Items List */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-semibold">Order Items</label>
-              <button type="button" className="flex items-center gap-1 text-xs bg-blue-500 text-white px-3 py-1 rounded-full" onClick={addItem}>
-                <Plus className="w-4 h-4" /> Add Item
-              </button>
-            </div>
-            {items.map((item, idx) => (
-              <div key={idx} className="flex gap-2 mb-2 items-end w-full">
-                <input
-                  type="text"
-                  className="flex-1 rounded-lg px-2 py-1 shadow-sm text-black bg-white w-full"
-                  placeholder="Item Name"
-                  value={item.item_name}
-                  onChange={(e) => handleItemChange(idx, 'item_name', e.target.value)}
-                />
-                <input
-                  type="number"
-                  className="w-16 rounded-lg px-2 py-1 shadow-sm text-black bg-white"
-                  placeholder="Qty"
-                  min={1}
-                  value={item.quantity}
-                  onChange={(e) => handleItemChange(idx, 'quantity', e.target.value.replace(/\D/g, ''))}
-                />
-                <input
-                  type="number"
-                  className="w-20 rounded-lg px-2 py-1 shadow-sm text-black bg-white"
-                  placeholder="Price"
-                  min={0}
-                  step="0.01"
-                  value={item.price}
-                  onChange={(e) => handleItemChange(idx, 'price', e.target.value)}
-                />
-                <span className="w-20 text-xs text-blue-500 font-bold">{item.totalamount ? `₹${item.totalamount}` : ''}</span>
-                {items.length > 1 && (
-                  <button type="button" className="p-1 bg-red-500 rounded-full" onClick={() => removeItem(idx)}>
-                    <Trash2 className="w-4 h-4 text-white" />
-                  </button>
-                )}
-              </div>
-            ))}
-            {errors.items && <p className="text-red-500 text-xs mt-1">{errors.items}</p>}
-          </div>
-          {/* Total Amount */}
-          <div>
-            <label className="block text-sm font-semibold mb-1">Total Amount</label>
-            <input
-              type="number"
-              className={`w-full rounded-lg px-3 py-2 shadow-sm text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 ${items.some(item => item.item_name && item.quantity && item.price) ? 'bg-gray-100' : ''}`}
-              placeholder="Total amount"
-              value={items.some(item => item.item_name && item.quantity && item.price) ? calcTotal() : totalAmount}
-              onChange={(e) => setTotalAmount(e.target.value)}
-              disabled={items.some(item => item.item_name && item.quantity && item.price)}
-              min={0}
-              step="0.01"
-              readOnly={items.some(item => item.item_name && item.quantity && item.price)}
-            />
-            {errors.totalAmount && <p className="text-red-500 text-xs mt-1">{errors.totalAmount}</p>}
-          </div>
-          {/* Urgency Toggle */}
-          <div>
-            <label className="block text-sm font-semibold mb-1">Urgency:</label>
-            <div className="relative w-full max-w-xs h-12 bg-white rounded-full flex items-center select-none overflow-hidden shadow-sm mx-auto">
-              {/* Sliding indicator */}
-              <span
-                className={`absolute top-0 left-0 h-full w-1/2 rounded-full bg-blue-500 transition-transform duration-200 ease-in-out z-0 ${urgency === 'Urgent' ? 'translate-x-full' : 'translate-x-0'}`}
-                style={{ width: '50%' }}
-              />
-              {/* Normal button */}
-              <button
-                type="button"
-                className={`flex-1 h-full z-10 relative font-bold rounded-full transition-colors duration-150 ${urgency === 'Normal' ? 'text-white' : 'text-black'}`}
-                onClick={() => setUrgency('Normal')}
-                style={{ outline: 'none' }}
-              >
-                Normal
-              </button>
-              {/* Urgent button */}
-              <button
-                type="button"
-                className={`flex-1 h-full z-10 relative font-bold rounded-full transition-colors duration-150 ${urgency === 'Urgent' ? 'text-white' : 'text-black'}`}
-                onClick={() => setUrgency('Urgent')}
-                style={{ outline: 'none' }}
-              >
-                Urgent
-              </button>
-            </div>
-          </div>
-          {/* Bill Image Upload */}
-          <div>
-            <label className="block text-sm font-semibold mb-1">Bill Image</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                id="bill-image-input"
-                onChange={handleBillImage}
-              />
-              <label htmlFor="bill-image-input" className="flex items-center gap-2 px-4 py-2 bg-blue-500 rounded-lg cursor-pointer text-white">
-                <Camera className="w-5 h-5" />
-                {billImage ? billImage.name : 'Add Bill Image'}
-              </label>
-              {billImage && (
-                <button type="button" className="text-xs text-red-500" onClick={() => setBillImage(null)}>
-                  Remove
-                </button>
+    <PageContainer background="bg-white">
+      <PageHeader title="Add Order" onBack={() => navigate(-1)} />
+      <form
+        className="flex flex-col gap-3 w-full"
+        onSubmit={handleSubmit}
+        autoComplete="off"
+      >
+        {/* Phone Search */}
+        <PhoneSearchInput
+          value={phone}
+          onChange={(e) => handlePhoneChange(e.target.value)}
+          onSearch={handleManualSearch}
+          loading={customerSearch.loading}
+          error={errors.phone || (customerSearch.error && phone.length === 10 ? customerSearch.error : '')}
+        />
+
+        {/* Name */}
+        <FormInput
+          label={
+            <>
+              Customer Name
+              {customerSearch.data && customerSearch.data.customer_name && (
+                <span className="ml-2 text-xs text-green-600 font-normal">✓ Auto-filled</span>
               )}
-            </div>
-          </div>
-          {/* Special Instructions */}
-          <div>
-            <label className="block text-sm font-semibold mb-1">Special Instructions</label>
-            <textarea
-              className="w-full rounded-lg px-3 py-2 shadow-sm text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 min-h-[60px]"
-              placeholder="Any special instructions?"
-              value={specialInstructions}
-              onChange={(e) => setSpecialInstructions(e.target.value)}
-            />
-          </div>
-          {/* Submit Button */}
-          <button
-            type="submit"
-            className="w-full py-3 rounded-full font-bold text-lg bg-blue-500 text-white flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-            disabled={loading}
-          >
-            {loading && <Loader2 className="animate-spin w-5 h-5" />} Create Order
-          </button>
-          {error && <p className="text-red-500 text-xs mt-3 text-center">{error}</p>}
-        </form>
-      </div>
-    </div>
+            </>
+          }
+          placeholder="Enter name"
+          value={customerName}
+          onChange={(e) => setCustomerName(e.target.value)}
+          error={errors.customerName}
+          className={customerSearch.data && customerSearch.data.customer_name ? 'ring-2 ring-green-300 bg-green-50' : ''}
+        />
+
+        {/* Address */}
+        <FormInput
+          label={
+            <>
+              Address
+              {customerSearch.data && customerSearch.data.address && (
+                <span className="ml-2 text-xs text-green-600 font-normal">✓ Auto-filled</span>
+              )}
+            </>
+          }
+          placeholder="Enter address"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          error={errors.address}
+          className={customerSearch.data && customerSearch.data.address ? 'ring-2 ring-green-300 bg-green-50' : ''}
+        />
+
+        {/* Bill No */}
+        <FormInput
+          label="Bill Number"
+          placeholder="Enter bill number"
+          value={billNo}
+          onChange={(e) => setBillNo(e.target.value)}
+          error={errors.billNo}
+        />
+
+        {/* Items List */}
+        <OrderItemsList
+          items={items}
+          onAddItem={addItem}
+          onRemoveItem={removeItem}
+          onItemChange={handleItemChange}
+          error={errors.items}
+        />
+
+        {/* Total Amount */}
+        <FormInput
+          label="Total Amount"
+          type="number"
+          placeholder="Total amount"
+          value={items.some(item => item.item_name && item.quantity && item.price) ? calcTotal() : totalAmount}
+          onChange={(e) => setTotalAmount(e.target.value)}
+          disabled={items.some(item => item.item_name && item.quantity && item.price)}
+          readOnly={items.some(item => item.item_name && item.quantity && item.price)}
+          min={0}
+          step="0.01"
+          error={errors.totalAmount}
+          className={items.some(item => item.item_name && item.quantity && item.price) ? 'bg-gray-100' : ''}
+        />
+
+        {/* Urgency and Water Need Toggles */}
+        <div className="grid grid-cols-2 gap-4">
+          <UrgencyToggle
+            value={urgency}
+            onChange={setUrgency}
+          />
+          <WaterNeedToggle
+            value={waterNeed}
+            onChange={setWaterNeed}
+          />
+        </div>
+
+        {/* Bill Image Upload */}
+        <ImageUpload
+          label="Bill Image"
+          value={billImage}
+          onChange={setBillImage}
+          onRemove={() => setBillImage(null)}
+          showRemoveButton={false}
+          previewHeight="h-20"
+        />
+
+        {/* Special Instructions */}
+        <FormTextarea
+          label="Special Instructions"
+          placeholder="Any special instructions?"
+          value={specialInstructions}
+          onChange={(e) => setSpecialInstructions(e.target.value)}
+          showCounter={false}
+        />
+
+        {/* Submit Button */}
+        <FormButton
+          type="submit"
+          loading={loading}
+          fullWidth
+          size="lg"
+          className="rounded-full font-bold text-lg"
+        >
+          Create Order
+        </FormButton>
+        
+        {error && <p className="text-red-500 text-xs mt-3 text-center">{error}</p>}
+      </form>
+    </PageContainer>
   );
 }

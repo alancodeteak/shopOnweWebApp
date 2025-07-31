@@ -41,7 +41,10 @@ const AssignOrder = () => {
         dispatch(fetchAvailablePartners());
     }, [dispatch]);
 
-    if (orderError) return <ErrorMessage message={orderError} />;
+    if (orderError) {
+      const errorInfo = typeof orderError === 'object' ? orderError : { message: orderError };
+      return <ErrorMessage message={errorInfo.message} />;
+    }
 
     return (
         <div className="bg-pink-50 min-h-screen pt-16 pb-24">

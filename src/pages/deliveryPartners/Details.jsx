@@ -1,11 +1,13 @@
 import React, { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { fetchPartnerById, updatePartner } from '@/store/slices/deliveryPartnerSlice';
+import { fetchPartnerById, updatePartner, resetBonusPenalty, resetPassword } from '@/store/slices/deliveryPartnerSlice';
 import AppSpinner from '@/components/AppSpinner';
 import ErrorMessage from '@/components/ErrorMessage';
-import { ArrowLeft, RefreshCw, Phone, Trash2, Edit2, Truck, BadgeCheck, User, Circle, Camera, Calendar, IdCard, Mail } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Phone, Trash2, Edit2, Truck, BadgeCheck, User, Circle, Calendar, IdCard, Lock } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import { ImageUpload, PasswordResetModal } from '@/components/forms';
+import { getErrorInfo } from '@/utils/errorHandler';
 
 // Helper function to construct proper image URLs
 const getImageUrl = (imagePath) => {
@@ -26,16 +28,17 @@ export default function DeliveryPartnerDetails() {
   const partner = useSelector((state) => state.deliveryPartners.current);
   const loading = useSelector((state) => state.deliveryPartners.loading);
   const error = useSelector((state) => state.deliveryPartners.error);
-
-  // Early return for loading and error states
-  if (loading) return <AppSpinner label={isEdit ? "Loading partner for edit..." : "Loading partner details..."} />;
-  if (error) return <ErrorMessage message={error} />;
-  if (!partner) return <div>No partner selected.</div>;
-
-  // Editable state for edit mode
+  const allPartners = useSelector((state) => state.deliveryPartners.list);
+  const resettingBonusPenalty = useSelector((state) => state.deliveryPartners.resettingBonusPenalty);
+  const resetBonusPenaltyError = useSelector((state) => state.deliveryPartners.resetBonusPenaltyError);
+  const resettingPassword = useSelector((state) => state.deliveryPartners.resettingPassword);
+  const resetPasswordError = useSelector((state) => state.deliveryPartners.resetPasswordError);
+  const updating = useSelector((state) => state.deliveryPartners.loading);
+  const updateError = useSelector((state) => state.deliveryPartners.error);
+  
+  // Editable state for edit mode - ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   const [step, setStep] = React.useState(1);
   const [profilePhoto, setProfilePhoto] = React.useState(null);
-  const [profilePhotoUrl, setProfilePhotoUrl] = React.useState("");
   const [basicInfo, setBasicInfo] = React.useState({
     first_name: '',
     last_name: '',
@@ -50,8 +53,17 @@ export default function DeliveryPartnerDetails() {
   const [dlBack, setDlBack] = React.useState(null);
   const [aadhaarFront, setAadhaarFront] = React.useState(null);
   const [aadhaarBack, setAadhaarBack] = React.useState(null);
+  // ImageUpload component handles existing images automatically
   const [partnerId, setPartnerId] = React.useState("");
+  const [showPasswordResetModal, setShowPasswordResetModal] = React.useState(false);
+  
+  // Find partner in the list if current is null
+  const partnerInList = allPartners?.find(p => p.delivery_partner_id === id);
+  const displayPartner = partner || partnerInList;
+  
 
+
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   React.useEffect(() => {
     if (id) {
       dispatch(fetchPartnerById(id));
@@ -60,80 +72,222 @@ export default function DeliveryPartnerDetails() {
 
   // Pre-fill form in edit mode
   React.useEffect(() => {
-    if (isEdit && partner) {
+    if (isEdit && displayPartner) {
       setBasicInfo({
-        first_name: partner.first_name || '',
-        last_name: partner.last_name || '',
-        age: partner.age ? String(partner.age) : '',
-        phone1: partner.phone1 ? String(partner.phone1) : '',
-        phone2: partner.phone2 ? String(partner.phone2) : '',
-        email: partner.email || '',
-        address: partner.address || '',
+        first_name: displayPartner.first_name || '',
+        last_name: displayPartner.last_name || '',
+        age: displayPartner.age ? String(displayPartner.age) : '',
+        phone1: displayPartner.phone1 ? String(displayPartner.phone1) : '',
+        phone2: displayPartner.phone2 ? String(displayPartner.phone2) : '',
+        email: '', // Not fetched from API
+        address: '', // Not fetched from API
       });
-      setProfilePhotoUrl(partner.photo_url || '');
-      setLicenseNo(partner.license_no || '');
-      setPartnerId(partner.delivery_partner_id || '');
-      try {
-        const license = partner.license_image ? JSON.parse(partner.license_image) : [];
-        setDlFront(license[0] || null);
-        setDlBack(license[1] || null);
-      } catch { setDlFront(null); setDlBack(null); }
-      try {
-        const aadhaar = partner.govt_id_image ? JSON.parse(partner.govt_id_image) : [];
-        setAadhaarFront(aadhaar[0] || null);
-        setAadhaarBack(aadhaar[1] || null);
-      } catch { setAadhaarFront(null); setAadhaarBack(null); }
+      // Profile photo is handled by ImageUpload component
+      setLicenseNo(displayPartner.license_no || '');
+      setPartnerId(displayPartner.delivery_partner_id || '');
+      
+      // Handle license images - use the correct field names from API
+      if (displayPartner.license_images && displayPartner.license_images.length > 0) {
+        // Set existing image URLs for display (ImageUpload handles URLs automatically)
+        setDlFront(displayPartner.license_images[0] || null);
+        setDlBack(displayPartner.license_images[1] || null);
+      } else {
+        // Fallback to old field name if needed
+        try {
+          const license = displayPartner.license_image ? JSON.parse(displayPartner.license_image) : [];
+          setDlFront(license[0] || null);
+          setDlBack(license[1] || null);
+        } catch { 
+          setDlFront(null); 
+          setDlBack(null); 
+        }
+      }
+      
+      // Handle government ID images - use the correct field names from API
+      if (displayPartner.govt_id_images && displayPartner.govt_id_images.length > 0) {
+        // Set existing image URLs for display (ImageUpload handles URLs automatically)
+        setAadhaarFront(displayPartner.govt_id_images[0] || null);
+        setAadhaarBack(displayPartner.govt_id_images[1] || null);
+      } else {
+        // Fallback to old field name if needed
+        try {
+          const aadhaar = displayPartner.govt_id_image ? JSON.parse(displayPartner.govt_id_image) : [];
+          setAadhaarFront(aadhaar[0] || null);
+          setAadhaarBack(aadhaar[1] || null);
+        } catch { 
+          setAadhaarFront(null); 
+          setAadhaarBack(null); 
+        }
+      }
     }
-  }, [isEdit, partner]);
+  }, [isEdit, displayPartner]);
 
-  // Validation (reuse from Create)
-  const isBasicInfoValid =
-    (profilePhotoUrl || partner.photo_url) &&
-    basicInfo.first_name.trim() &&
-    basicInfo.last_name.trim() &&
-    basicInfo.age &&
-    basicInfo.phone1.trim().length === 10 &&
-    basicInfo.address.trim();
-  const isDocumentsValid =
-    licenseNo.trim() &&
-    (dlFront || partner?.license_image) &&
-    (dlBack || partner?.license_image) &&
-    partnerId;
+  // Early return for loading and error states
+  if (loading) {
+    return <AppSpinner label={isEdit ? "Loading partner for edit..." : "Loading partner details..."} />;
+  }
+  if (error && !partnerInList) {
+    const errorInfo = getErrorInfo(error);
+    return (
+      <ErrorMessage 
+        message={errorInfo.message}
+        statusCode={errorInfo.statusCode}
+        isNetworkError={errorInfo.isNetworkError}
+        isServerError={errorInfo.isServerError}
+        onRetry={() => dispatch(fetchPartnerById(id))}
+      />
+    );
+  }
+  if (!displayPartner) {
+    return <div className="text-center py-12 text-gray-500">No partner data found.</div>;
+  }
+
+  // No frontend validation - let backend handle all validation
 
   // Handlers for edit mode
   const handleBasicChange = (e) => {
     const { name, value } = e.target;
     setBasicInfo((prev) => ({ ...prev, [name]: value }));
   };
-  const handleProfilePhoto = (e) => {
-    const file = e.target.files[0];
-    setProfilePhoto(file);
-    setProfilePhotoUrl(file ? URL.createObjectURL(file) : partner.photo_url || '');
-  };
+  // Profile photo is now handled by ImageUpload component
   const handleNext = (e) => {
     e.preventDefault();
-    if (isBasicInfoValid) setStep(2);
+    setStep(2); // Always allow proceeding to next step
   };
   const handleBack = () => setStep(1);
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!isDocumentsValid) return;
+    
     const data = new FormData();
-    data.append("first_name", basicInfo.first_name);
-    data.append("last_name", basicInfo.last_name);
-    data.append("age", basicInfo.age);
-    data.append("phone1", basicInfo.phone1);
-    data.append("phone2", basicInfo.phone2);
-    data.append("email", basicInfo.email);
-    data.append("address", basicInfo.address);
-    if (profilePhoto) data.append("photo", profilePhoto);
-    data.append("license_no", licenseNo);
-    data.append("license_image", JSON.stringify([dlFront || '', dlBack || '']));
-    data.append("govt_id_image", JSON.stringify([aadhaarFront || '', aadhaarBack || '']));
-    data.append("delivery_partner_id", partnerId);
-    dispatch(updatePartner({ id, formData: data })).then(() => {
-      navigate(`/delivery-partners/${id}`);
+    
+    // Debug: Log what we're about to send
+    console.log('🔍 Form submission debug:');
+    console.log('dlFront type:', typeof dlFront, dlFront instanceof File ? 'File' : 'Not File');
+    console.log('dlBack type:', typeof dlBack, dlBack instanceof File ? 'File' : 'Not File');
+    console.log('aadhaarFront type:', typeof aadhaarFront, aadhaarFront instanceof File ? 'File' : 'Not File');
+    console.log('aadhaarBack type:', typeof aadhaarBack, aadhaarBack instanceof File ? 'File' : 'Not File');
+    
+    // Only send changed fields to the server
+    if (basicInfo.first_name !== displayPartner.first_name) {
+      data.append("first_name", basicInfo.first_name || '');
+    }
+    if (basicInfo.last_name !== displayPartner.last_name) {
+      data.append("last_name", basicInfo.last_name || '');
+    }
+    if (basicInfo.age !== String(displayPartner.age || '')) {
+      data.append("age", basicInfo.age || '');
+    }
+    if (basicInfo.phone1 !== String(displayPartner.phone1 || '')) {
+      data.append("phone1", basicInfo.phone1 || '');
+    }
+    if (basicInfo.phone2 !== String(displayPartner.phone2 || '')) {
+      data.append("phone2", basicInfo.phone2 || '');
+    }
+    // Note: email and address are not fetched from API, so we don't send them in updates
+    if (licenseNo !== displayPartner.license_no) {
+      data.append("license_no", licenseNo || '');
+    }
+    
+    // Always send partner ID for identification
+    data.append("delivery_partner_id", partnerId || '');
+    
+    // Only send photo if a new one is uploaded
+    if (profilePhoto) {
+      data.append("photo", profilePhoto);
+    }
+    
+    // Only send license images if they are new files (not URLs)
+    const newLicenseFiles = [];
+    if (dlFront && dlFront instanceof File) {
+      newLicenseFiles.push(dlFront);
+    }
+    if (dlBack && dlBack instanceof File) {
+      newLicenseFiles.push(dlBack);
+    }
+    
+    // Only append license_image if there are actual new files
+    if (newLicenseFiles.length > 0) {
+      newLicenseFiles.forEach(file => {
+        data.append("license_image", file);
+      });
+    }
+    
+    // Only send government ID images if they are new files (not URLs)
+    const newGovtIdFiles = [];
+    if (aadhaarFront && aadhaarFront instanceof File) {
+      newGovtIdFiles.push(aadhaarFront);
+    }
+    if (aadhaarBack && aadhaarBack instanceof File) {
+      newGovtIdFiles.push(aadhaarBack);
+    }
+    
+    // Only append govt_id_image if there are actual new files
+    if (newGovtIdFiles.length > 0) {
+      newGovtIdFiles.forEach(file => {
+        data.append("govt_id_image", file);
+      });
+    }
+    
+    // Debug: Log what we're sending
+    console.log('📤 Sending FormData:');
+    console.log('FormData entries:');
+    for (let [key, value] of data.entries()) {
+      console.log(`${key}:`, value instanceof File ? `File: ${value.name} (${value.size} bytes)` : value);
+    }
+    
+    // Check if we have any image files
+    console.log('🔍 Image file check:');
+    console.log('newLicenseFiles.length:', newLicenseFiles.length);
+    console.log('newGovtIdFiles.length:', newGovtIdFiles.length);
+    console.log('profilePhoto:', profilePhoto ? `File: ${profilePhoto.name}` : 'null');
+    
+    dispatch(updatePartner({ id, formData: data }))
+      .then((result) => {
+        if (result.meta.requestStatus === 'fulfilled') {
+          console.log('✅ Update successful, refreshing partner data...');
+          // Always fetch fresh data to ensure all images are loaded
+          return dispatch(fetchPartnerById(id));
+        }
+      })
+      .then((fetchResult) => {
+        if (fetchResult?.meta?.requestStatus === 'fulfilled') {
+          console.log('✅ Partner data refreshed, navigating back...');
+          navigate(`/delivery-partners/${id}`);
+        }
+      })
+      .catch((error) => {
+        console.error('❌ Update or refresh failed:', error);
+      });
+  };
+
+  const handleResetBonusPenalty = async () => {
+    try {
+      await dispatch(resetBonusPenalty(id)).unwrap();
+      // No need to refresh - state is updated automatically in the Redux slice
+    } catch (error) {
+      // Error is handled by the Redux slice
+    }
+  };
+
+  const handleResetPassword = async (newPassword) => {
+    console.log('🔐 Password reset initiated:', {
+      deliveryPartnerId: displayPartner.delivery_partner_id,
+      newPassword: newPassword ? '***' : 'undefined'
     });
+    
+    try {
+      const result = await dispatch(resetPassword({ 
+        deliveryPartnerId: displayPartner.delivery_partner_id, 
+        newPassword 
+      })).unwrap();
+      
+      console.log('✅ Password reset successful:', result);
+      setShowPasswordResetModal(false);
+      // You can add a success toast here if needed
+    } catch (error) {
+      console.error('❌ Password reset failed:', error);
+      // Error is handled by the Redux slice
+    }
   };
 
   if (isEdit) {
@@ -164,23 +318,15 @@ export default function DeliveryPartnerDetails() {
           <form onSubmit={handleNext} className="space-y-3 sm:space-y-4 bg-white p-4 sm:p-6 rounded-lg shadow-md">
             {/* Profile Photo Upload */}
             <div className="flex flex-col items-center mb-2 sm:mb-2">
-              <label htmlFor="profilePhoto" className="relative cursor-pointer">
-                <img
-                  src={profilePhotoUrl || 'https://ui-avatars.com/api/?name=DP'}
-                  alt="Profile"
-                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-gray-200 shadow"
-                />
-                <span className="absolute bottom-1.5 right-1.5 sm:bottom-2 sm:right-2 bg-white p-1 rounded-full border shadow">
-                  <Camera size={18} className="text-gray-500 sm:w-5 sm:h-5" />
-                </span>
-                <input
-                  type="file"
-                  id="profilePhoto"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleProfilePhoto}
-                />
-              </label>
+              <ImageUpload
+                label="Profile Photo"
+                value={profilePhoto}
+                onChange={setProfilePhoto}
+                onRemove={() => setProfilePhoto(null)}
+                previewHeight="h-20 w-20 sm:h-24 sm:w-24"
+                className="flex flex-col items-center"
+                showRemoveButton={false}
+              />
             </div>
             {/* Input Fields */}
             <div className="relative">
@@ -192,7 +338,6 @@ export default function DeliveryPartnerDetails() {
                 value={basicInfo.first_name}
                 onChange={handleBasicChange}
                 className="pl-9 sm:pl-10 pr-3 py-2 rounded-md border w-full shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-                required
               />
             </div>
             <div className="relative">
@@ -204,7 +349,6 @@ export default function DeliveryPartnerDetails() {
                 value={basicInfo.last_name}
                 onChange={handleBasicChange}
                 className="pl-9 sm:pl-10 pr-3 py-2 rounded-md border w-full shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-                required
               />
             </div>
             <div className="relative">
@@ -214,7 +358,6 @@ export default function DeliveryPartnerDetails() {
                 value={basicInfo.age}
                 onChange={handleBasicChange}
                 className="pl-9 sm:pl-10 pr-3 py-2 rounded-md border w-full shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-                required
               >
                 <option value="">Age (18-60)</option>
                 {Array.from({ length: 43 }, (_, i) => 18 + i).map(age => <option key={age} value={age}>{age}</option>)}
@@ -229,7 +372,6 @@ export default function DeliveryPartnerDetails() {
                 value={basicInfo.phone1}
                 onChange={handleBasicChange}
                 className="pl-9 sm:pl-10 pr-3 py-2 rounded-md border w-full shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-                required
                 maxLength={10}
               />
             </div>
@@ -245,37 +387,18 @@ export default function DeliveryPartnerDetails() {
                 maxLength={10}
               />
             </div>
-            <div className="relative">
-              <Mail className="absolute left-3 top-3 text-gray-400" size={16} />
-              <input
-                type="email"
-                name="email"
-                placeholder="Email"
-                value={basicInfo.email}
-                onChange={handleBasicChange}
-                className="pl-9 sm:pl-10 pr-3 py-2 rounded-md border w-full shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-              />
-            </div>
-            <div className="relative">
-              <span className="absolute left-3 top-3 text-gray-400">
-                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 9.75V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9.75M12 3v10.25"/><path d="M12 3l7 6.75M12 3L5 9.75"/></svg>
-              </span>
-              <input
-                type="text"
-                name="address"
-                placeholder="Address"
-                value={basicInfo.address}
-                onChange={handleBasicChange}
-                className="pl-9 sm:pl-10 pr-3 py-2 rounded-md border w-full shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-                required
-              />
-            </div>
+            {/* Email and Address fields are not fetched from API, so they're hidden from edit form */}
+            {updateError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs sm:text-sm">
+                {updateError}
+              </div>
+            )}
             <button
               type="submit"
-              className={`w-full py-2 rounded-full font-bold text-white text-sm ${isBasicInfoValid ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-200 cursor-not-allowed'}`}
-              disabled={!isBasicInfoValid}
+              className="w-full py-2 rounded-full font-bold text-white text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={updating}
             >
-              Next
+              {updating ? 'Loading...' : 'Next'}
             </button>
           </form>
         )}
@@ -291,7 +414,6 @@ export default function DeliveryPartnerDetails() {
                   onChange={e => setLicenseNo(e.target.value)}
                   placeholder="License Number"
                   className="pl-9 sm:pl-10 pr-3 py-2 rounded-md border w-full shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  required
                 />
               </div>
             </div>
@@ -299,46 +421,44 @@ export default function DeliveryPartnerDetails() {
             <div>
               <div className="font-semibold mb-1 text-sm">Driving License (DL)</div>
               <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                {[dlFront, dlBack].map((img, i) => (
-                  <label key={i} className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg h-24 sm:h-28 cursor-pointer bg-gray-50">
-                    {img ? (
-                      <img src={typeof img === 'string' ? img : URL.createObjectURL(img)} alt={`DL ${i === 0 ? 'Front' : 'Back'}`} className="object-cover w-full h-full rounded-lg" />
-                    ) : (
-                      <>
-                        <Camera size={24} className="text-gray-400 mb-1 sm:w-7 sm:h-7" />
-                        <span className="text-[10px] sm:text-xs text-gray-400">{i === 0 ? 'Front' : 'Back'}</span>
-                      </>
-                    )}
-                    <input type="file" accept="image/*" className="hidden" onChange={e => {
-                      const file = e.target.files[0];
-                      if (i === 0) setDlFront(file);
-                      else setDlBack(file);
-                    }} />
-                  </label>
-                ))}
+                <ImageUpload
+                  label="Front"
+                  value={dlFront}
+                  onChange={setDlFront}
+                  onRemove={() => setDlFront(null)}
+                  previewHeight="h-24 sm:h-28"
+                  showRemoveButton={false}
+                />
+                <ImageUpload
+                  label="Back"
+                  value={dlBack}
+                  onChange={setDlBack}
+                  onRemove={() => setDlBack(null)}
+                  previewHeight="h-24 sm:h-28"
+                  showRemoveButton={false}
+                />
               </div>
             </div>
             {/* Aadhaar Card Uploads */}
             <div>
               <div className="font-semibold mb-1 text-sm">Aadhaar Card (Optional)</div>
               <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                {[aadhaarFront, aadhaarBack].map((img, i) => (
-                  <label key={i} className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg h-24 sm:h-28 cursor-pointer bg-gray-50">
-                    {img ? (
-                      <img src={typeof img === 'string' ? img : URL.createObjectURL(img)} alt={`Aadhaar ${i === 0 ? 'Front' : 'Back'}`} className="object-cover w-full h-full rounded-lg" />
-                    ) : (
-                      <>
-                        <Camera size={24} className="text-gray-400 mb-1 sm:w-7 sm:h-7" />
-                        <span className="text-[10px] sm:text-xs text-gray-400">{i === 0 ? 'Front' : 'Back'}</span>
-                      </>
-                    )}
-                    <input type="file" accept="image/*" className="hidden" onChange={e => {
-                      const file = e.target.files[0];
-                      if (i === 0) setAadhaarFront(file);
-                      else setAadhaarBack(file);
-                    }} />
-                  </label>
-                ))}
+                <ImageUpload
+                  label="Front"
+                  value={aadhaarFront}
+                  onChange={setAadhaarFront}
+                  onRemove={() => setAadhaarFront(null)}
+                  previewHeight="h-24 sm:h-28"
+                  showRemoveButton={false}
+                />
+                <ImageUpload
+                  label="Back"
+                  value={aadhaarBack}
+                  onChange={setAadhaarBack}
+                  onRemove={() => setAadhaarBack(null)}
+                  previewHeight="h-24 sm:h-28"
+                  showRemoveButton={false}
+                />
               </div>
             </div>
             {/* Partner ID (read only) */}
@@ -351,14 +471,18 @@ export default function DeliveryPartnerDetails() {
                 className="flex-1 rounded-md border bg-gray-100 shadow-sm px-3 py-2 text-sm"
               />
             </div>
+            {updateError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs sm:text-sm">
+                {updateError}
+              </div>
+            )}
             <button
               type="submit"
-              className={`w-full py-2 rounded-full font-bold text-white text-sm ${isDocumentsValid ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-200 cursor-not-allowed'}`}
-              disabled={!isDocumentsValid}
+              className="w-full py-2 rounded-full font-bold text-white text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={updating}
             >
-              Save Changes
+              {updating ? 'Saving...' : 'Save Changes'}
             </button>
-            {error && <p className="text-red-500 text-xs sm:text-sm">{error}</p>}
           </form>
         )}
       </div>
@@ -370,68 +494,49 @@ export default function DeliveryPartnerDetails() {
   let govtIdImages = [];
   
   // Use correct field names from API response
-  licenseImages = partner.license_images || [];
-  govtIdImages = partner.govt_id_images || [];
+  licenseImages = displayPartner.license_images || [];
+  govtIdImages = displayPartner.govt_id_images || [];
   
   // Alternative parsing for different response formats
-  if (licenseImages.length === 0 && partner.license_image) {
+  if (licenseImages.length === 0 && displayPartner.license_image) {
     // Try parsing as string array or single string
-    if (typeof partner.license_image === 'string') {
-      if (partner.license_image.includes('[')) {
-        try { licenseImages = JSON.parse(partner.license_image); } catch {}
+    if (typeof displayPartner.license_image === 'string') {
+      if (displayPartner.license_image.includes('[')) {
+        try { licenseImages = JSON.parse(displayPartner.license_image); } catch {}
       } else {
-        licenseImages = [partner.license_image];
+        licenseImages = [displayPartner.license_image];
       }
-    } else if (Array.isArray(partner.license_image)) {
-      licenseImages = partner.license_image;
+    } else if (Array.isArray(displayPartner.license_image)) {
+      licenseImages = displayPartner.license_image;
     }
   }
   
-  if (govtIdImages.length === 0 && partner.govt_id_image) {
+  if (govtIdImages.length === 0 && displayPartner.govt_id_image) {
     // Try parsing as string array or single string
-    if (typeof partner.govt_id_image === 'string') {
-      if (partner.govt_id_image.includes('[')) {
-        try { govtIdImages = JSON.parse(partner.govt_id_image); } catch {}
+    if (typeof displayPartner.govt_id_image === 'string') {
+      if (displayPartner.govt_id_image.includes('[')) {
+        try { govtIdImages = JSON.parse(displayPartner.govt_id_image); } catch {}
       } else {
-        govtIdImages = [partner.govt_id_image];
+        govtIdImages = [displayPartner.govt_id_image];
       }
-    } else if (Array.isArray(partner.govt_id_image)) {
-      govtIdImages = partner.govt_id_image;
+    } else if (Array.isArray(displayPartner.govt_id_image)) {
+      govtIdImages = displayPartner.govt_id_image;
     }
   }
   
-  // Debug logging for image URLs
-  console.log('Partner photo URL:', partner.photo_url);
-  console.log('License images:', licenseImages);
-  console.log('Government ID images:', govtIdImages);
-  console.log('Full partner object:', partner);
-  console.log('License images raw:', partner.license_images);
-  console.log('Government ID images raw:', partner.govt_id_images);
-  console.log('Alternative photo fields:', {
-    profile_photo: partner.profile_photo,
-    profile_image: partner.profile_image,
-    image: partner.image,
-    avatar: partner.avatar
-  });
-  console.log('Alternative license fields:', {
-    license_images: partner.license_images,
-    driving_license: partner.driving_license,
-    dl_images: partner.dl_images
-  });
-  console.log('Alternative govt ID fields:', {
-    govt_id_images: partner.govt_id_images,
-    aadhaar: partner.aadhaar,
-    aadhaar_images: partner.aadhaar_images
-  });
+
+  
   // Use actual images from API response, no fallback to sample images
   const displayGovtIdImages = govtIdImages.filter(img => img && img.trim() !== '');
   const displayLicenseImages = licenseImages.filter(img => img && img.trim() !== '');
   
   // Use correct field name for profile photo from API
-  const apiProfilePhotoUrl = partner.photo_url;
+  const apiProfilePhotoUrl = displayPartner.photo_url;
 
   return (
     <div className="bg-pink-50 min-h-screen pt-16 pb-24 px-2 sm:px-4">
+
+      
       <PageHeader
         title="Delivery Partner Details"
         onBack={() => navigate(-1)}
@@ -444,23 +549,23 @@ export default function DeliveryPartnerDetails() {
           <div className="relative">
             <img 
               src={getImageUrl(apiProfilePhotoUrl) || 'https://ui-avatars.com/api/?name=DP'} 
-              alt={partner.first_name} 
+              alt={displayPartner.first_name} 
               className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-white shadow" 
               onError={e => { e.target.onerror = null; e.target.src = 'https://ui-avatars.com/api/?name=DP'; }} 
             />
-            {partner.online_status === 'online' && (
+            {displayPartner.online_status === 'online' && (
               <span className="absolute bottom-1.5 right-1.5 sm:bottom-2 sm:right-2 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 border-2 border-white rounded-full"></span>
             )}
           </div>
           <div className="mt-2 text-center">
-            <div className="text-lg sm:text-xl font-bold">{partner.first_name} {partner.last_name}</div>
-            <div className="text-gray-500 text-xs sm:text-sm">Age: {partner.age || '-'}</div>
+            <div className="text-lg sm:text-xl font-bold">{displayPartner.first_name} {displayPartner.last_name}</div>
+            <div className="text-gray-500 text-xs sm:text-sm">Age: {displayPartner.age || '-'}</div>
             <div className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full mt-1 text-[10px] sm:text-xs font-semibold">
-              <BadgeCheck size={12} className="sm:w-[14px] sm:h-[14px]" /> {partner.delivery_partner_id}
+              <BadgeCheck size={12} className="sm:w-[14px] sm:h-[14px]" /> {displayPartner.delivery_partner_id}
             </div>
           </div>
           <div className="flex gap-1.5 sm:gap-2 w-full mt-3 sm:mt-4">
-            <button className="flex-1 bg-blue-600 text-white py-1.5 sm:py-2 rounded-lg flex items-center justify-center gap-1 sm:gap-2 font-bold shadow hover:bg-blue-700 text-xs sm:text-sm" onClick={() => window.open(`tel:${partner.phone1}`)}>
+            <button className="flex-1 bg-blue-600 text-white py-1.5 sm:py-2 rounded-lg flex items-center justify-center gap-1 sm:gap-2 font-bold shadow hover:bg-blue-700 text-xs sm:text-sm" onClick={() => window.open(`tel:${displayPartner.phone1}`)}>
               <Phone size={14} className="sm:w-[18px] sm:h-[18px]" /> Call
             </button>
             <button className="flex-1 bg-red-500 text-white py-1.5 sm:py-2 rounded-lg flex items-center justify-center gap-1 sm:gap-2 font-bold shadow hover:bg-red-600 text-xs sm:text-sm">
@@ -470,8 +575,19 @@ export default function DeliveryPartnerDetails() {
               <Edit2 size={14} className="sm:w-[18px] sm:h-[18px]" /> Edit
             </button>
           </div>
+          <div className="flex gap-1.5 sm:gap-2 w-full mt-2">
+            <button 
+              className="flex-1 bg-orange-500 text-white py-1.5 sm:py-2 rounded-lg flex items-center justify-center gap-1 sm:gap-2 font-bold shadow hover:bg-orange-600 text-xs sm:text-sm"
+              onClick={() => {
+                console.log('🔘 Reset Password button clicked');
+                setShowPasswordResetModal(true);
+              }}
+            >
+              <Lock size={14} className="sm:w-[18px] sm:h-[18px]" /> Reset Password
+            </button>
+          </div>
           <div className="w-full mt-3 sm:mt-4 bg-blue-50 rounded-lg flex items-center justify-center py-1.5 sm:py-2 font-semibold text-blue-700 gap-1.5 sm:gap-2 text-xs sm:text-sm">
-            <Truck size={14} className="sm:w-[18px] sm:h-[18px]" /> Total Orders: {partner.order_count || 0}
+            <Truck size={14} className="sm:w-[18px] sm:h-[18px]" /> Total Orders: {displayPartner.order_count || 0}
           </div>
         </div>
 
@@ -482,17 +598,29 @@ export default function DeliveryPartnerDetails() {
             <div className="flex items-center gap-2">
               <User size={16} className="text-gray-400 sm:w-[18px] sm:h-[18px]" />
               <span className="text-xs sm:text-sm">Current Status</span>
-              <span className="ml-auto bg-blue-100 text-blue-700 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">{partner.current_status}</span>
+              <span className="ml-auto bg-blue-100 text-blue-700 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">{displayPartner.current_status}</span>
             </div>
             <div className="flex items-center gap-2">
               <Circle size={12} className="text-gray-400 sm:w-[14px] sm:h-[14px]" />
               <span className="text-xs sm:text-sm">Online Status</span>
-              <span className="ml-auto bg-green-100 text-green-700 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">{partner.online_status}</span>
+              <span className="ml-auto bg-green-100 text-green-700 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">{displayPartner.online_status}</span>
             </div>
+            <div className="flex items-center gap-2">
+              <Phone size={14} className="text-gray-400 sm:w-[16px] sm:h-[16px]" />
+              <span className="text-xs sm:text-sm">Primary Phone</span>
+              <span className="ml-auto bg-blue-100 text-blue-700 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">{displayPartner.phone1}</span>
+            </div>
+            {displayPartner.phone2 && (
+              <div className="flex items-center gap-2">
+                <Phone size={14} className="text-gray-400 sm:w-[16px] sm:h-[16px]" />
+                <span className="text-xs sm:text-sm">Secondary Phone</span>
+                <span className="ml-auto bg-blue-100 text-blue-700 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">{displayPartner.phone2}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <BadgeCheck size={14} className="text-gray-400 sm:w-[16px] sm:h-[16px]" />
               <span className="text-xs sm:text-sm">License Number</span>
-              <span className="ml-auto bg-blue-100 text-blue-700 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">{partner.license_no}</span>
+              <span className="ml-auto bg-blue-100 text-blue-700 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">{displayPartner.license_no}</span>
             </div>
           </div>
         </div>
@@ -543,18 +671,32 @@ export default function DeliveryPartnerDetails() {
           </div>
         </div>
 
-        {/* Bonus & Penalty Summary */}
+                {/* Bonus & Penalty Summary */}
         <div className="bg-white rounded-2xl shadow p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <div className="font-bold text-sm sm:text-base">Bonus & Penalty Summary</div>
-            <button className="bg-orange-400 text-white px-2 py-0.5 sm:px-3 sm:py-1 rounded-lg flex items-center gap-1 font-semibold hover:bg-orange-500 text-xs sm:text-sm">
-              <RefreshCw size={14} className="sm:w-4 sm:h-4" /> Reset
+            <button 
+              onClick={handleResetBonusPenalty}
+              disabled={resettingBonusPenalty}
+              className="bg-orange-400 text-white px-2 py-0.5 sm:px-3 sm:py-1 rounded-lg flex items-center gap-1 font-semibold hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
+            >
+              <RefreshCw size={14} className={`sm:w-4 sm:h-4 ${resettingBonusPenalty ? 'animate-spin' : ''}`} /> 
+              {resettingBonusPenalty ? 'Resetting...' : 'Reset'}
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-2">
-            <div className="bg-green-50 text-green-700 rounded-lg p-2 sm:p-3 text-center font-bold text-xs sm:text-sm">Bonus Points<br/>{partner.total_bonus || 0}</div>
-            <div className="bg-red-50 text-red-700 rounded-lg p-2 sm:p-3 text-center font-bold text-xs sm:text-sm">Penalty Points<br/>{partner.total_penalty || 0}</div>
+          {resetBonusPenaltyError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg mb-3 text-xs sm:text-sm">
+              {resetBonusPenaltyError}
             </div>
+          )}
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-2">
+            <div className="bg-green-50 text-green-700 rounded-lg p-2 sm:p-3 text-center font-bold text-xs sm:text-sm">
+              Bonus Points<br/>{displayPartner.total_bonus || 0}
+            </div>
+            <div className="bg-red-50 text-red-700 rounded-lg p-2 sm:p-3 text-center font-bold text-xs sm:text-sm">
+              Penalty Points<br/>{displayPartner.total_penalty || 0}
+            </div>
+          </div>
         </div>
         
         {/* Powered by Codeteak */}
@@ -563,6 +705,17 @@ export default function DeliveryPartnerDetails() {
           <img src="/assets/codeteak-logo.png" alt="Codeteak Logo" className="h-3 sm:h-4 object-contain mt-1 md:mt-2" />
         </div>
       </main>
+
+      {/* Password Reset Modal */}
+      <PasswordResetModal
+        isOpen={showPasswordResetModal}
+        onClose={() => setShowPasswordResetModal(false)}
+        onSubmit={handleResetPassword}
+        loading={resettingPassword}
+        error={resetPasswordError}
+        title="Reset Delivery Partner Password"
+        partnerId={displayPartner?.delivery_partner_id}
+      />
     </div>
   );
 }

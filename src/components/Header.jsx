@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { Menu, Transition } from '@headlessui/react';
-import { RefreshCw, User, LogOut, BarChart2 } from 'lucide-react';
+import { RefreshCw, User, LogOut, BarChart2, Megaphone } from 'lucide-react';
 import { Fragment } from 'react';
 import { logout } from '@/store/slices/authSlice';
 
@@ -71,6 +71,19 @@ export default function Header({ title }) {
                       >
                         <BarChart2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
                         Analytics
+                      </button>
+                    )}
+                  </Menu.Item>
+                  <Menu.Item>
+                    {({ active }) => (
+                      <button
+                        onClick={() => navigate('/promotions')}
+                        className={`${
+                          active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'
+                        } group flex w-full items-center rounded-md px-2 py-2 text-xs sm:text-sm`}
+                      >
+                        <Megaphone className="mr-2 h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
+                        Promotions
                       </button>
                     )}
                   </Menu.Item>

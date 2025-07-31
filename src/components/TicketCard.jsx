@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Copy, Phone } from 'lucide-react';
 import { toast } from 'react-toastify';
+import Card from '@/components/Card';
+import StatusBadge from '@/components/StatusBadge';
+import { FormTextarea, FormButton } from '@/components/forms';
 
 export default function TicketCard({ ticket, onAccept, onReject, onCall }) {
   const [notes, setNotes] = useState('');
@@ -11,7 +14,7 @@ export default function TicketCard({ ticket, onAccept, onReject, onCall }) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-md p-4 border w-full mb-4">
+    <Card className="w-full mb-4">
       {/* Card Header */}
       <div className="flex justify-between items-center mb-3">
         <div className="flex items-center gap-2">
@@ -20,9 +23,7 @@ export default function TicketCard({ ticket, onAccept, onReject, onCall }) {
             <Copy className="w-4 h-4 text-gray-400 hover:text-blue-600" />
           </button>
         </div>
-        <span className="bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-full uppercase">
-          {ticket.status}
-        </span>
+        <StatusBadge status={ticket.status} variant="pill" />
       </div>
 
       {/* Main Content */}
@@ -41,13 +42,13 @@ export default function TicketCard({ ticket, onAccept, onReject, onCall }) {
         </div>
         
         <div className="absolute top-0 right-0">
-          <button 
+          <FormButton
             onClick={() => onCall(ticket.delivery_partner.phone)}
-            className="flex items-center gap-2 bg-blue-500 text-white font-semibold text-sm px-3 py-2 rounded-lg shadow-sm hover:bg-blue-600 transition"
+            icon={Phone}
+            size="sm"
           >
-            <Phone size={14} />
             Call Partner
-          </button>
+          </FormButton>
         </div>
       </div>
 
@@ -65,31 +66,35 @@ export default function TicketCard({ ticket, onAccept, onReject, onCall }) {
 
       {/* Resolution Notes */}
       <div className="mt-4">
-        <label className="block text-sm font-semibold text-gray-700 mb-1">Resolution Notes:</label>
-        <textarea
-          className="w-full border rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          rows={2}
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
+        <FormTextarea
+          label="Resolution Notes"
           placeholder="Enter your reply or resolution notes here..."
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          showCounter={false}
         />
       </div>
 
       {/* Action Buttons */}
       <div className="flex gap-4 mt-6">
-        <button 
+        <FormButton
           onClick={() => onAccept(ticket.id, notes)}
-          className="flex-1 bg-green-500 text-white font-bold py-3 rounded-full shadow-md hover:bg-green-600 transition"
+          variant="primary"
+          fullWidth
+          size="lg"
         >
           ACCEPT
-        </button>
-        <button 
+        </FormButton>
+        <FormButton
           onClick={() => onReject(ticket.id, notes)}
-          className="flex-1 bg-red-500 text-white font-bold py-3 rounded-full shadow-md hover:bg-orange-600 transition"
+          variant="danger"
+          fullWidth
+          size="lg"
         >
           REJECT
-        </button>
+        </FormButton>
       </div>
-    </div>
+    </Card>
   );
 } 

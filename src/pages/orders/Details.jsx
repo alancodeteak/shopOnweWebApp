@@ -21,6 +21,7 @@ import ErrorMessage from '@/components/ErrorMessage';
 import toast from 'react-hot-toast';
 import PageHeader from '@/components/PageHeader';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
+import { isWaterNeeded, getWaterNeedText } from '@/utils/orderUtils';
 
 const DetailRow = ({ icon: Icon, label, value, badge }) => (
   <div className="flex items-start gap-4 py-2">
@@ -316,6 +317,19 @@ export default function OrderDetails() {
               <span className="text-xs text-gray-500">Urgency:</span>
               <span className={`text-xs px-2 py-1 rounded-full font-semibold ${order.urgency === 'Urgent' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{order.urgency?.toUpperCase()}</span>
             </div>
+            {/* Debug: Log water value */}
+            {console.log('🌊 OrderDetails water:', order.water, typeof order.water, 'isWaterNeeded:', isWaterNeeded(order.water), 'Order ID:', order.order_id)}
+            {console.log('🌊 Full order object:', order)}
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs text-gray-500">Water Need:</span>
+              <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                isWaterNeeded(order.water) 
+                  ? 'bg-blue-100 text-blue-700' 
+                  : 'bg-gray-100 text-gray-700'
+              }`}>
+                {getWaterNeedText(order.water)}
+              </span>
+            </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-0 sm:gap-2 mb-2 w-full">
               <span className="text-xs text-gray-500">Order Status</span>
               <span className={`text-xs sm:text-xs px-2 py-1 rounded-full font-semibold mt-1 sm:mt-0 ${order.order_status === 'Delivered' ? 'bg-green-100 text-green-700' : order.order_status === 'Cancelled' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'} w-full sm:w-auto max-w-full sm:max-w-xs break-words whitespace-normal text-center`}>{order.order_status}</span>
@@ -348,6 +362,22 @@ export default function OrderDetails() {
                   <div className="font-bold text-blue-600 text-base">₹{item.totalamount}</div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Special Instructions Card */}
+        {order.special_instructions && (
+          <div className="bg-white rounded-2xl shadow p-5">
+            <h2 className="text-lg font-bold text-black mb-4 flex items-center gap-3">
+              <span className="bg-orange-500 rounded-full p-1 flex items-center justify-center">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </span> Special Instructions
+            </h2>
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <p className="text-sm text-gray-800 leading-relaxed">{order.special_instructions}</p>
             </div>
           </div>
         )}

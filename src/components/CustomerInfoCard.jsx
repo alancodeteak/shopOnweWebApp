@@ -2,6 +2,8 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 import { User, Phone, MapPin } from 'lucide-react';
 import AppSpinner from '@/components/AppSpinner';
+import Card from '@/components/Card';
+import InfoRow from '@/components/InfoRow';
 
 const CustomerInfoCard = React.memo(() => {
     const customerName = useSelector((state) => state.orders.current?.customer_name);
@@ -14,23 +16,23 @@ const CustomerInfoCard = React.memo(() => {
     }
 
     return (
-        <div className="bg-white shadow-md rounded-xl p-4 transition-all duration-300">
+        <Card>
             <h3 className="text-sm font-semibold text-gray-800 mb-3">Customer Information</h3>
             <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                    <User size={16} className="text-blue-500" />
-                    <span className="text-sm text-gray-700">{customerName}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                    <Phone size={16} className="text-blue-500" />
-                    <span className="text-sm text-gray-700">{customerPhone}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                    <MapPin size={16} className="text-blue-500" />
-                    <span className="text-sm text-gray-700">{address}</span>
-                </div>
+                <InfoRow 
+                    icon={User} 
+                    value={customerName} 
+                />
+                <InfoRow 
+                    icon={Phone} 
+                    value={customerPhone} 
+                />
+                <InfoRow 
+                    icon={MapPin} 
+                    value={address} 
+                />
             </div>
-        </div>
+        </Card>
     );
 });
 

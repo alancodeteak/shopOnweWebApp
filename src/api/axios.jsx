@@ -14,10 +14,11 @@ API.interceptors.request.use((config) => {
 
   if (!isPublicEndpoint && token) {
     config.headers.Authorization = `Bearer ${token}`;
-    config.headers["Content-Type"] = "application/json";
-    config.headers["x-api-key"] = import.meta.env.VITE_API_KEY;
-    // Remove any problematic headers that might cause CORS issues
-    delete config.headers["Clear-Site-Data"];
+    // Only set Content-Type to application/json if it's not already set (for file uploads)
+    if (!config.headers["Content-Type"]) {
+      config.headers["Content-Type"] = "application/json";
+    }
+    config.headers["x-api-key"] = import.meta.env.VITE_ADMIN_KEY;
 
     // Only log in development mode
     if (import.meta.env.DEV) {
@@ -27,16 +28,6 @@ API.interceptors.request.use((config) => {
     console.warn("⚠️ No token found in localStorage");
   }
 
-  // Final safeguard: Remove any Clear-Site-Data header (case-insensitive)
-  Object.keys(config.headers).forEach((key) => {
-    if (key.toLowerCase() === 'clear-site-data') {
-      delete config.headers[key];
-      if (import.meta.env.DEV) {
-        console.warn(`🚫 Removed Clear-Site-Data header: ${key}`);
-      }
-    }
-  });
-
   return config;
 });
 
@@ -44,10 +35,42 @@ API.interceptors.request.use((config) => {
 API.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 0 || error.message === 'Network Error') {
-      console.error('CORS or Network Error:', error);
+    // Enhanced error handling with proper error categorization
+    let enhancedError = { ...error };
+    
+    // Network errors (no internet, server unreachable)
+    if (!error.response) {
+      enhancedError.isNetworkError = true;
+      enhancedError.statusCode = 0;
+      enhancedError.message = 'Network Error: Unable to connect to the server';
     }
-    return Promise.reject(error);
+    // Server errors (5xx status codes)
+    else if (error.response.status >= 500) {
+      enhancedError.isServerError = true;
+      enhancedError.statusCode = error.response.status;
+      enhancedError.message = 'Server Error: Our servers are currently experiencing issues';
+    }
+    // CORS errors
+    else if (error.response.status === 0) {
+      enhancedError.isNetworkError = true;
+      enhancedError.statusCode = 0;
+      enhancedError.message = 'CORS Error: Cross-origin request blocked';
+    }
+    // Other HTTP errors
+    else {
+      enhancedError.statusCode = error.response.status;
+      enhancedError.message = error.response.data?.message || error.message;
+    }
+    
+    console.error('API Error:', {
+      status: enhancedError.statusCode,
+      message: enhancedError.message,
+      isNetworkError: enhancedError.isNetworkError,
+      isServerError: enhancedError.isServerError,
+      url: error.config?.url
+    });
+    
+    return Promise.reject(enhancedError);
   }
 );
 
