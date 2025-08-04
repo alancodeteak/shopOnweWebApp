@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { fetchOrdersByStatus } from '@/store/slices/ordersSlice';
+import { fetchOrdersByStatus, searchOrders, fetchDeliveryPartners, fetchPaymentModes } from '@/store/slices/ordersSlice';
 import OrderCard from '@/components/OrderCard';
 import AppSpinner from '@/components/AppSpinner';
 import ErrorMessage from '@/components/ErrorMessage';
 import PageHeader from '@/components/PageHeader';
-import { OrderSearchInput } from '@/components/forms';
+import { OrderSearchInput, FilterButton, FilterChips } from '@/components/forms';
 import { RefreshCw } from 'lucide-react';
 import { updateCustomerAddress } from '@/store/slices/ordersSlice';
 import toast from 'react-hot-toast';
@@ -14,10 +14,18 @@ import toast from 'react-hot-toast';
 // TabBar component for completed orders filtering
 function CompletedTabBar({ activeTab, setActiveTab, pillSize }) {
   const completedOrders = useSelector((state) => state.orders.completedOrders);
-  const verifiedCount = completedOrders?.filter(order => 
+  const searchResults = useSelector((state) => state.orders.list);
+  const searchQuery = useSelector((state) => state.orders.searchQuery);
+  const activeFilters = useSelector((state) => state.orders.activeFilters);
+  
+  // Use search results if there's a search query or filters, otherwise use completed orders
+  const hasSearchOrFilters = searchQuery || Object.values(activeFilters).some(filters => filters.length > 0);
+  const ordersToCount = hasSearchOrFilters ? searchResults : completedOrders;
+  
+  const verifiedCount = ordersToCount?.filter(order => 
     order.payment_verification !== true && order.payment_verification !== 'true'
   ).length || 0;
-  const nonVerifiedCount = completedOrders?.filter(order => 
+  const nonVerifiedCount = ordersToCount?.filter(order => 
     order.payment_verification === true || order.payment_verification === 'true'
   ).length || 0;
   
@@ -28,7 +36,7 @@ function CompletedTabBar({ activeTab, setActiveTab, pillSize }) {
   return (
     <div className="flex justify-between gap-2 mt-4 mb-4 w-full max-w-xs mx-auto">
       {[
-        { name: 'All', count: completedOrders?.length || 0 },
+        { name: 'All', count: ordersToCount?.length || 0 },
         { name: 'Verified', count: verifiedCount },
         { name: 'Non-verified', count: nonVerifiedCount }
       ].map((tab) => (
@@ -62,8 +70,11 @@ export default function CompletedOrders() {
   const navigate = useNavigate();
   const shopId = useSelector((state) => state.auth.user?.shopId);
   const completedOrders = useSelector((state) => state.orders.completedOrders);
-  const loading = useSelector((state) => state.orders.completedOrdersLoading);
-  const error = useSelector((state) => state.orders.completedOrdersError);
+  const searchResults = useSelector((state) => state.orders.list);
+  const searchQuery = useSelector((state) => state.orders.searchQuery);
+  const activeFilters = useSelector((state) => state.orders.activeFilters);
+  const loading = useSelector((state) => state.orders.completedOrdersLoading || state.orders.loading);
+  const error = useSelector((state) => state.orders.completedOrdersError || state.orders.error);
   const pagination = useSelector((state) => state.orders.completedOrdersPagination) || { page: 1, totalPages: 1 };
   const [modalOpen, setModalOpen] = useState(false);
   const [modalOrder, setModalOrder] = useState(null);
@@ -71,47 +82,120 @@ export default function CompletedOrders() {
   const updateLoading = useSelector((state) => state.orders.updateCustomerAddressLoading);
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [localSearchQuery, setLocalSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const limit = 20;
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(localSearchQuery);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [localSearchQuery]);
+
+  // Fetch filter options on component mount
+  useEffect(() => {
+    if (shopId) {
+      dispatch(fetchDeliveryPartners(shopId));
+      dispatch(fetchPaymentModes(shopId));
+    }
+  }, [dispatch, shopId]);
+
+  // Handle search and filters
+  useEffect(() => {
+    if (shopId) {
+      const hasSearchOrFilters = debouncedQuery.trim() || Object.values(activeFilters).some(filters => filters.length > 0);
+      
+      if (hasSearchOrFilters) {
+        // Apply tab filter to verification status
+        let filters = { ...activeFilters };
+        if (activeTab === 'Verified') {
+          filters.verificationStatus = ['verified'];
+        } else if (activeTab === 'Non-verified') {
+          filters.verificationStatus = ['non-verified'];
+        }
+        
+        dispatch(searchOrders({ 
+          query: debouncedQuery.trim(), 
+          shopId, 
+          filters 
+        }));
+      } else {
+        dispatch(fetchOrdersByStatus({ shopId, status: 'completed', page: currentPage, limit }));
+      }
+    }
+  }, [dispatch, shopId, debouncedQuery, activeFilters, activeTab]);
+
+  // Initial load and pagination
+  useEffect(() => {
+    if (shopId && !debouncedQuery.trim() && Object.values(activeFilters).every(filters => filters.length === 0)) {
+      dispatch(fetchOrdersByStatus({ shopId, status: 'completed', page: currentPage, limit }));
+    }
+  }, [dispatch, shopId, currentPage]);
 
   // Filter orders based on active tab and search query
   const filteredOrders = useMemo(() => {
-    if (!completedOrders) return [];
+    // Use search results if there's a search query or filters, otherwise use completed orders
+    const hasSearchOrFilters = searchQuery || Object.values(activeFilters).some(filters => filters.length > 0);
+    const ordersToFilter = hasSearchOrFilters ? searchResults : completedOrders;
     
-    let filtered = completedOrders;
+    if (!ordersToFilter) return [];
     
-    // Filter by tab
-    switch (activeTab) {
-      case 'Verified':
-        filtered = filtered.filter(order => 
-          order.payment_verification !== true && order.payment_verification !== 'true'
-        );
-        break;
-      case 'Non-verified':
-        filtered = filtered.filter(order => 
-          order.payment_verification === true || order.payment_verification === 'true'
-        );
-        break;
-      default:
-        break;
-    }
+    let filtered = ordersToFilter;
     
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(order => 
-        order.customer_name?.toLowerCase().includes(query) ||
-        order.customer_phone_number?.includes(query) ||
-        order.order_id?.toString().includes(query) ||
-        order.bill_no?.toLowerCase().includes(query)
-      );
+    // Filter by tab (only if no search/filters are active)
+    if (!hasSearchOrFilters) {
+      switch (activeTab) {
+        case 'Verified':
+          filtered = filtered.filter(order => 
+            order.payment_verification !== true && order.payment_verification !== 'true'
+          );
+          break;
+        case 'Non-verified':
+          filtered = filtered.filter(order => 
+            order.payment_verification === true || order.payment_verification === 'true'
+          );
+          break;
+        default:
+          break;
+      }
     }
     
     return filtered;
-  }, [completedOrders, activeTab, searchQuery]);
+  }, [completedOrders, searchResults, searchQuery, activeFilters, activeTab]);
 
   const handleRefresh = () => {
-    if (shopId) dispatch(fetchOrdersByStatus({ shopId, status: 'completed', page: currentPage, limit }));
+    if (shopId) {
+      const hasSearchOrFilters = debouncedQuery.trim() || Object.values(activeFilters).some(filters => filters.length > 0);
+      
+      if (hasSearchOrFilters) {
+        let filters = { ...activeFilters };
+        if (activeTab === 'Verified') {
+          filters.verificationStatus = ['verified'];
+        } else if (activeTab === 'Non-verified') {
+          filters.verificationStatus = ['non-verified'];
+        }
+        
+        dispatch(searchOrders({ 
+          query: debouncedQuery.trim(), 
+          shopId, 
+          filters 
+        }));
+      } else {
+        dispatch(fetchOrdersByStatus({ shopId, status: 'completed', page: currentPage, limit }));
+      }
+    }
+  };
+
+  const handleSearchChange = (value) => {
+    setLocalSearchQuery(value);
+  };
+
+  const handleSearchClear = () => {
+    setLocalSearchQuery('');
+    setDebouncedQuery('');
   };
 
   const handleOpenModal = (order) => {
@@ -145,12 +229,6 @@ export default function CompletedOrders() {
     }
   };
 
-  useEffect(() => {
-    if (shopId) {
-      dispatch(fetchOrdersByStatus({ shopId, status: 'completed', page: currentPage, limit }));
-    }
-  }, [dispatch, shopId, currentPage]);
-
   return (
     <div className="max-w-screen-md mx-auto px-4 pt-16 pb-24">
       <PageHeader
@@ -159,26 +237,32 @@ export default function CompletedOrders() {
         onRefresh={handleRefresh}
         isLoading={loading}
       >
-        {completedOrders && completedOrders.length > 0 && (
+        {filteredOrders && filteredOrders.length > 0 && (
           <span className="inline-flex items-center justify-center bg-blue-600 text-white text-xs font-bold rounded-full h-5 w-5 align-middle" style={{ marginTop: '2px' }}>
-            {completedOrders.length > 99 ? '99+' : completedOrders.length}
+            {filteredOrders.length > 99 ? '99+' : filteredOrders.length}
           </span>
         )}
       </PageHeader>
       
       <CompletedTabBar activeTab={activeTab} setActiveTab={setActiveTab} pillSize="small" />
       
-      {/* Search Bar */}
-      <div className="mb-6">
-        <OrderSearchInput
-          value={searchQuery}
-          onChange={setSearchQuery}
-          onClear={() => setSearchQuery('')}
-          placeholder="Search by customer name, phone, or order ID..."
-        />
+      {/* Filter Section */}
+      <div className="flex items-center gap-3 mb-4">
+        <FilterButton />
+        <div className="flex-1">
+          <OrderSearchInput
+            value={localSearchQuery}
+            onChange={handleSearchChange}
+            onClear={handleSearchClear}
+            placeholder="Search by customer name, phone, or order ID..."
+          />
+        </div>
       </div>
       
-      {loading && <AppSpinner label="Loading completed orders..." />}
+      {/* Filter Chips */}
+      <FilterChips />
+      
+      {loading && <AppSpinner label={debouncedQuery.trim() || Object.values(activeFilters).some(filters => filters.length > 0) ? "Searching completed orders..." : "Loading completed orders..."} />}
       {error && <ErrorMessage message={error} />}
       
       <div className="space-y-4 transition-all duration-300">
@@ -194,12 +278,17 @@ export default function CompletedOrders() {
       
       {!loading && !error && (!filteredOrders || filteredOrders.length === 0) && (
         <div className="text-center text-gray-400 mt-12">
-          {activeTab === 'All' ? 'No completed orders found.' : `No ${activeTab.toLowerCase()} orders found.`}
+          {debouncedQuery.trim() || Object.values(activeFilters).some(filters => filters.length > 0)
+            ? 'No completed orders found matching your search and filters.' 
+            : activeTab === 'All' 
+              ? 'No completed orders found.' 
+              : `No ${activeTab.toLowerCase()} orders found.`
+          }
         </div>
       )}
       
-      {/* Pagination Controls */}
-      {pagination.totalPages > 1 && (
+      {/* Pagination Controls - Only show when not searching/filtering */}
+      {!debouncedQuery.trim() && Object.values(activeFilters).every(filters => filters.length === 0) && pagination.totalPages > 1 && (
         <div className="flex justify-center items-center gap-2 mt-8">
           <button
             className="px-3 py-1 rounded bg-gray-100 text-gray-600 font-semibold disabled:opacity-50"

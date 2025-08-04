@@ -173,6 +173,86 @@ export const searchOrderById = createAsyncThunk(
   }
 );
 
+// Search orders with query
+export const searchOrders = createAsyncThunk(
+  "orders/search",
+  async ({ query, shopId, page = 1, limit = 20, filters = {} }, thunkAPI) => {
+    try {
+      const params = new URLSearchParams({
+        shop_id: shopId,
+        page: page.toString(),
+        limit: limit.toString()
+      });
+      
+      if (query) {
+        params.append('query', query);
+      }
+      
+      // Add filter parameters
+      if (filters.deliveryPartners?.length > 0) {
+        filters.deliveryPartners.forEach(partner => {
+          params.append('delivery_partners[]', partner);
+        });
+      }
+      
+      if (filters.paymentModes?.length > 0) {
+        filters.paymentModes.forEach(mode => {
+          params.append('payment_modes[]', mode);
+        });
+      }
+      
+      if (filters.verificationStatus?.length > 0) {
+        filters.verificationStatus.forEach(status => {
+          params.append('verification_status[]', status);
+        });
+      }
+      
+      const res = await API.get(`/orders/search?${params.toString()}`);
+      return {
+        orders: res.data.data.orders || res.data.data || [],
+        page: res.data.data.page || page,
+        totalPages: res.data.data.totalPages || 1,
+        query,
+        filters,
+      };
+    } catch (err) {
+      return thunkAPI.rejectWithValue(
+        err?.response?.data?.message || "Failed to search orders"
+      );
+    }
+  }
+);
+
+// Fetch delivery partners for filter options
+export const fetchDeliveryPartners = createAsyncThunk(
+  "orders/fetchDeliveryPartners",
+  async (shopId, thunkAPI) => {
+    try {
+      const res = await API.get(`/delivery-partners?shop_id=${shopId}`);
+      return res.data.data || [];
+    } catch (err) {
+      return thunkAPI.rejectWithValue(
+        err?.response?.data?.message || "Failed to fetch delivery partners"
+      );
+    }
+  }
+);
+
+// Fetch payment modes for filter options
+export const fetchPaymentModes = createAsyncThunk(
+  "orders/fetchPaymentModes",
+  async (shopId, thunkAPI) => {
+    try {
+      const res = await API.get(`/orders/payment-modes?shop_id=${shopId}`);
+      return res.data.data || [];
+    } catch (err) {
+      return thunkAPI.rejectWithValue(
+        err?.response?.data?.message || "Failed to fetch payment modes"
+      );
+    }
+  }
+);
+
 // Create order
 export const createOrder = createAsyncThunk(
   "orders/create",
@@ -259,6 +339,19 @@ const initialState = {
   loading: false, // General loading for non-status-specific actions
   error: null,
   pagination: null,
+  searchQuery: null, // Track current search query
+  // Filter state
+  activeFilters: {
+    deliveryPartners: [],
+    paymentModes: [],
+    verificationStatus: [],
+  },
+  availableFilters: {
+    deliveryPartners: [],
+    paymentModes: [],
+  },
+  filtersLoading: false,
+  filtersError: null,
   // State for different order categories
   newOrders: [],
   newOrdersLoading: false,
@@ -308,6 +401,37 @@ const ordersSlice = createSlice({
         error: null,
       };
     },
+    clearSearchQuery: (state) => {
+      state.searchQuery = null;
+    },
+    // Filter actions
+    setFilter: (state, action) => {
+      const { type, value } = action.payload;
+      if (state.activeFilters[type]) {
+        if (!state.activeFilters[type].includes(value)) {
+          state.activeFilters[type].push(value);
+        }
+      }
+    },
+    removeFilter: (state, action) => {
+      const { type, value } = action.payload;
+      if (state.activeFilters[type]) {
+        state.activeFilters[type] = state.activeFilters[type].filter(item => item !== value);
+      }
+    },
+    clearAllFilters: (state) => {
+      state.activeFilters = {
+        deliveryPartners: [],
+        paymentModes: [],
+        verificationStatus: [],
+      };
+    },
+    clearFilterType: (state, action) => {
+      const { type } = action.payload;
+      if (state.activeFilters[type]) {
+        state.activeFilters[type] = [];
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -325,6 +449,7 @@ const ordersSlice = createSlice({
           page: action.payload.page || 1,
           totalPages: action.payload.totalPages || 1,
         };
+        state.searchQuery = null; // Clear search query when fetching all orders
         
         // Debug: Log the first order to see what fields are available
         if (state.list.length > 0) {
@@ -353,6 +478,57 @@ const ordersSlice = createSlice({
         state.error = action.payload || "Order not found";
         state.list = [];
         state.pagination = { page: 1, totalPages: 1 };
+      })
+
+      // Search orders with query
+      .addCase(searchOrders.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(searchOrders.fulfilled, (state, action) => {
+        state.loading = false;
+        state.list = action.payload.orders;
+        state.pagination = {
+          page: action.payload.page || 1,
+          totalPages: action.payload.totalPages || 1,
+        };
+        state.searchQuery = action.payload.query;
+        state.activeFilters = action.payload.filters || state.activeFilters;
+      })
+      .addCase(searchOrders.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload || "Failed to search orders";
+        state.list = [];
+        state.pagination = { page: 1, totalPages: 1 };
+        state.searchQuery = null;
+      })
+
+      // Fetch delivery partners for filters
+      .addCase(fetchDeliveryPartners.pending, (state) => {
+        state.filtersLoading = true;
+        state.filtersError = null;
+      })
+      .addCase(fetchDeliveryPartners.fulfilled, (state, action) => {
+        state.filtersLoading = false;
+        state.availableFilters.deliveryPartners = action.payload;
+      })
+      .addCase(fetchDeliveryPartners.rejected, (state, action) => {
+        state.filtersLoading = false;
+        state.filtersError = action.payload || "Failed to fetch delivery partners";
+      })
+
+      // Fetch payment modes for filters
+      .addCase(fetchPaymentModes.pending, (state) => {
+        state.filtersLoading = true;
+        state.filtersError = null;
+      })
+      .addCase(fetchPaymentModes.fulfilled, (state, action) => {
+        state.filtersLoading = false;
+        state.availableFilters.paymentModes = action.payload;
+      })
+      .addCase(fetchPaymentModes.rejected, (state, action) => {
+        state.filtersLoading = false;
+        state.filtersError = action.payload || "Failed to fetch payment modes";
       })
 
       // Fetch Single Order by ID
@@ -545,7 +721,16 @@ const ordersSlice = createSlice({
   },
 });
 
-export const { clearCurrentOrder, clearCreatedOrder, updateUrgencyLocal, clearCustomerSearch } =
-  ordersSlice.actions;
+export const { 
+  clearCurrentOrder, 
+  clearCreatedOrder, 
+  updateUrgencyLocal, 
+  clearCustomerSearch, 
+  clearSearchQuery,
+  setFilter,
+  removeFilter,
+  clearAllFilters,
+  clearFilterType
+} = ordersSlice.actions;
 
 export default ordersSlice.reducer;
