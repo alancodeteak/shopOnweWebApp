@@ -34,10 +34,9 @@ const handleTokenExpiration = protectFunction(() => {
 // Use main domain with /api prefix
 const getBaseURL = () => {
   if (import.meta.env.DEV) {
-    // In development, use the main domain with /api prefix
-    return 'https://yaadro.com/api';
+    return import.meta.env.VITE_API_BASE_URL || 'https://example.com/api';
   }
-  return import.meta.env.VITE_API_BASE_URL || 'https://yaadro.com/api';
+  return import.meta.env.VITE_API_BASE_URL || 'https://example.com/api';
 };
 
 const API = axios.create({

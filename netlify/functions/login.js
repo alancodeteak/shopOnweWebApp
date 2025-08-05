@@ -15,12 +15,14 @@ exports.handler = async function(event, context) {
 
   try {
     // Forward the login request to your real backend, adding the secret header
+    const backendUrl = process.env.BACKEND_LOGIN_URL || 'https://example.com/api/login'; // Use env var or placeholder
+    const apiKey = process.env.ADMIN_KEY || 'demo-key'; // Use env var or placeholder
     const response = await axios.post(
-      'https://yaadro.com/api/shopowner/auth/login', // <-- your real backend login endpoint
+      backendUrl,
       body,
       {
         headers: {
-          'x-api-key': process.env.ADMIN_KEY, // <-- secret from Netlify env vars
+          'x-api-key': apiKey,
           'Content-Type': 'application/json',
         }
       }
