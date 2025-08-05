@@ -64,7 +64,7 @@ API.interceptors.request.use(async (config) => {
       if (!config.headers["Content-Type"]) {
         config.headers["Content-Type"] = "application/json";
       }
-      config.headers["x-api-key"] = import.meta.env.VITE_ADMIN_KEY || 'default_admin_key'; 
+      // If you need to call a protected endpoint, do it from a backend/serverless function.
       
       // Add device token if available
       const user = JSON.parse(localStorage.getItem('user') || '{}');

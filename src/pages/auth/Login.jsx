@@ -47,7 +47,7 @@ export default function Login() {
     }
     try {
       setLoading(true);
-      const response = await API.post('/shopowner/auth/login', {
+      const response = await API.post('/.netlify/functions/login', {
         userId,
         password,
       });
