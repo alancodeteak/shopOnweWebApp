@@ -497,7 +497,7 @@ export default function CompletedOrders() {
                 {safeFilters.endDate && (
                   <span className="inline-flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm">
                     To: {new Date(safeFilters.endDate).toLocaleDateString()}
-                    <button
+                    <button 
                       onClick={() => handleFilterChange('endDate', '')}
                       className="ml-1 hover:text-orange-900"
                     > 
