@@ -34,9 +34,10 @@ const handleTokenExpiration = protectFunction(() => {
 // Use main domain with /api prefix
 const getBaseURL = () => {
   if (import.meta.env.DEV) {
-    return import.meta.env.VITE_API_BASE_URL || 'https://example.com/api';
+    // In development, use the main domain with /api prefix
+    return 'https://yaadro.com/api';
   }
-  return import.meta.env.VITE_API_BASE_URL || 'https://example.com/api';
+  return import.meta.env.VITE_API_BASE_URL || 'https://yaadro.com/api';
 };
 
 const API = axios.create({
@@ -63,7 +64,7 @@ API.interceptors.request.use(async (config) => {
       if (!config.headers["Content-Type"]) {
         config.headers["Content-Type"] = "application/json";
       }
-      // If you need to call a protected endpoint, do it from a backend/serverless function.
+      config.headers["x-api-key"] = import.meta.env.VITE_ADMIN_KEY || 'default_admin_key'; 
       
       // Add device token if available
       const user = JSON.parse(localStorage.getItem('user') || '{}');

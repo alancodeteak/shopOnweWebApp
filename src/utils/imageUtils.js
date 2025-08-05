@@ -11,12 +11,12 @@ export const getImageUrl = (imagePath) => {
   
   // Handle relative paths that start with /
   if (imagePath.startsWith('/')) {
-    const fullUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://example.com/api'}${imagePath}`;
+    const fullUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://yaadro.com/api'}${imagePath}`;
     return fullUrl;
   }
   
   // Handle relative paths without leading /
-  const fullUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://example.com/api'}/${imagePath}`;
+  const fullUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://yaadro.com/api'}/${imagePath}`;
   return fullUrl;
 };
 

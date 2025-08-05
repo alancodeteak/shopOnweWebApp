@@ -3,7 +3,7 @@ export const checkEnvironmentVariables = () => {
   const envVars = {
     VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
     VITE_GOOGLE_MAPS_API_KEY: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    // VITE_ADMIN_KEY: import.meta.env.VITE_ADMIN_KEY, // Do not use secrets in frontend. Use backend/serverless.
+    VITE_ADMIN_KEY: import.meta.env.VITE_ADMIN_KEY,
     NODE_ENV: import.meta.env.NODE_ENV,
   };
 
