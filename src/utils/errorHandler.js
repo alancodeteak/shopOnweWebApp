@@ -1,119 +1,121 @@
 /**
  * Utility function to extract error information for ErrorMessage component
- * @param {Error} error - The error object from API calls
+ * @param {Error|Object} error - The error object
  * @returns {Object} Error information for ErrorMessage component
  */
-export const getErrorInfo = (error) => {
-  if (!error) {
-    return {
-      message: "An unknown error occurred.",
-      statusCode: null,
-      isNetworkError: false,
-      isServerError: false
-    };
-  }
-
-  // Check if it's an enhanced error from our axios interceptor
-  if (error.isNetworkError || error.isServerError) {
-    return {
-      message: error.message,
-      statusCode: error.statusCode,
-      isNetworkError: error.isNetworkError,
-      isServerError: error.isServerError
-    };
-  }
-
-  // Handle regular axios errors
-  if (error.response) {
-    return {
-      message: error.response.data?.message || error.message,
-      statusCode: error.response.status,
-      isNetworkError: false,
-      isServerError: error.response.status >= 500
-    };
-  }
-
-  // Handle network errors (no response)
-  if (error.request) {
-    return {
-      message: "Unable to connect to the server. Please check your internet connection.",
-      statusCode: 0,
-      isNetworkError: true,
-      isServerError: false
-    };
-  }
-
-  // Handle other errors
-  return {
-    message: error.message || "An unknown error occurred.",
-    statusCode: null,
-    isNetworkError: false,
-    isServerError: false
-  };
-};
-
-/**
- * Get user-friendly error message based on error type
- * @param {Error} error - The error object
- * @returns {string} User-friendly error message
- */
 export const getErrorMessage = (error) => {
-  const errorInfo = getErrorInfo(error);
-  
-  if (errorInfo.isNetworkError) {
-    return "Please check your internet connection and try again.";
+  if (!error) return { message: "An unknown error occurred." };
+
+  // Handle string errors
+  if (typeof error === 'string') {
+    return { message: error };
   }
-  
-  if (errorInfo.isServerError) {
-    return "Our servers are currently under maintenance. Please try again later.";
+
+  // Handle error objects with message property
+  if (error.message) {
+    return { message: error.message };
   }
-  
-  if (errorInfo.statusCode === 404) {
-    return "The requested resource was not found.";
+
+  // Handle API error responses
+  if (error.response) {
+    const status = error.response.status;
+    const message = error.response.data?.message || `HTTP ${status} error`;
+    
+    return {
+      message,
+      statusCode: status,
+      isNetworkError: status === 0,
+      isServerError: status >= 500
+    };
   }
-  
-  if (errorInfo.statusCode === 401) {
-    return "Please log in again to continue.";
+
+  // Handle network errors
+  if (error.message === 'Network Error' || error.code === 'NETWORK_ERROR') {
+    return {
+      message: 'Network error. Please check your internet connection.',
+      isNetworkError: true
+    };
   }
-  
-  if (errorInfo.statusCode === 403) {
-    return "You don't have permission to access this resource.";
+
+  // Handle timeout errors
+  if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+    return {
+      message: 'Request timed out. Please check your connection and try again.',
+      isNetworkError: true
+    };
   }
-  
-  if (errorInfo.statusCode === 422 || errorInfo.statusCode === 400) {
-    return "Please check your input and try again.";
-  }
-  
-  return errorInfo.message;
+
+  // Default fallback
+  return { message: "An unknown error occurred." };
 };
 
 /**
- * Check if error is retryable
- * @param {Error} error - The error object
- * @returns {boolean} Whether the error can be retried
+ * Detect if an error is a network error
+ * @param {Error|Object|string} error - The error object or message
+ * @returns {boolean} True if it's a network error
  */
-export const isRetryableError = (error) => {
-  const errorInfo = getErrorInfo(error);
+export const isNetworkError = (error) => {
+  if (!error) return false;
   
-  // Network errors are retryable
-  if (errorInfo.isNetworkError) {
-    return true;
+  // Handle string errors - check for network-related messages
+  if (typeof error === 'string') {
+    const networkErrorMessages = [
+      'Network error',
+      'Network Error',
+      'Failed to fetch',
+      'connection',
+      'internet',
+      'offline',
+      'timeout',
+      'ECONNABORTED'
+    ];
+    return networkErrorMessages.some(msg => 
+      error.toLowerCase().includes(msg.toLowerCase())
+    );
   }
   
-  // Server errors (5xx) are retryable
-  if (errorInfo.isServerError) {
-    return true;
-  }
+  // Check for network error message
+  if (error.message === 'Network Error') return true;
   
-  // 408 Request Timeout is retryable
-  if (errorInfo.statusCode === 408) {
-    return true;
-  }
+  // Check for status 0 (network error)
+  if (error.response?.status === 0) return true;
   
-  // 429 Too Many Requests is retryable (after delay)
-  if (errorInfo.statusCode === 429) {
-    return true;
-  }
+  // Check for connection timeout
+  if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) return true;
+  
+  // Check for fetch network errors
+  if (error.name === 'TypeError' && error.message?.includes('fetch')) return true;
+  
+  // Check for custom network error objects from Redux
+  if (error.isNetworkError) return true;
   
   return false;
+};
+
+/**
+ * Detect if an error is a server error (5xx status codes)
+ * @param {Error|Object|string} error - The error object or message
+ * @returns {boolean} True if it's a server error
+ */
+export const isServerError = (error) => {
+  if (!error) return false;
+  
+  // Handle string errors - check for server-related messages
+  if (typeof error === 'string') {
+    const serverErrorMessages = [
+      'server error',
+      'internal server',
+      '500',
+      '502',
+      '503',
+      '504',
+      'maintenance'
+    ];
+    return serverErrorMessages.some(msg => 
+      error.toLowerCase().includes(msg.toLowerCase())
+    );
+  }
+  
+  const status = error.response?.status;
+  return status && status >= 500;
 }; 

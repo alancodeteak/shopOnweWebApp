@@ -1,6 +1,7 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
-import AppSpinner from '@/components/AppSpinner';
+import { LoadingSpinner } from '@/components';
+import Card from '@/components/Card';
 
 const OrderItemsCard = React.memo(() => {
     const items = useSelector((state) => state.orders.current?.items);
@@ -9,13 +10,13 @@ const OrderItemsCard = React.memo(() => {
     const loading = useSelector((state) => state.orders.loading);
 
     if (loading) {
-        return <AppSpinner label="Loading items..." />;
+        return <LoadingSpinner size="medium" message="Loading items..." />;
     }
 
     return (
         <div className="bg-white shadow-md rounded-xl p-4 transition-all duration-300">
             <h3 className="text-sm font-semibold text-gray-800 mb-3">Order Items</h3>
-            {items && items.length > 0 ? (
+            {Array.isArray(items) && items.length > 0 ? (
                 <ul className="space-y-2">
                     {items.map((item, idx) => (
                         <li key={item.id || idx} className="flex justify-between text-sm">

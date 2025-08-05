@@ -1,9 +1,12 @@
 import { CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { ErrorBoundary, NetworkErrorHandler } from '@/components';
 
 const AssignSuccess = () => {
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-pink-50 text-center pt-16 pb-24">
+        <ErrorBoundary>
+            <NetworkErrorHandler>
+                <div className="flex flex-col items-center justify-center min-h-screen bg-pink-50 text-center pt-16 pb-24">
             <div className="max-w-screen-md mx-auto px-4">
             <CheckCircle className="text-green-500 w-24 h-24 mb-6" />
             <h1 className="text-2xl font-bold text-gray-800 mb-2">Order Assigned!</h1>
@@ -15,7 +18,9 @@ const AssignSuccess = () => {
                 Back to Dashboard
             </Link>
             </div>
-        </div>
+                </div>
+            </NetworkErrorHandler>
+        </ErrorBoundary>
     );
 };
 

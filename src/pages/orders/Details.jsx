@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { fetchOrderById, verifyPayment, updateCustomerAddress, updateOrderStatusByShopOwner } from '@/store/slices/ordersSlice';
+import { fetchOrderById, updateOrderUrgency, verifyPayment, updateCustomerAddress, updateOrderStatusByShopOwner } from '@/store/slices/ordersSlice';
 import { fetchPartnerById } from '@/store/slices/deliveryPartnerSlice';
 import {
   ArrowLeft,
@@ -16,12 +16,14 @@ import {
   Truck,
   AlertTriangle,
 } from 'lucide-react';
-import AppSpinner from '@/components/AppSpinner';
-import ErrorMessage from '@/components/ErrorMessage';
+import { LoadingSpinner, ErrorMessage, ErrorBoundary, NetworkErrorHandler } from '@/components';
+import { PageContainer, PageHeader } from '@/components';
+import { FormInput, FormTextarea, FormButton } from '@/components/forms';
+import { isNetworkError, isServerError } from '@/utils/errorHandler';
 import toast from 'react-hot-toast';
-import PageHeader from '@/components/PageHeader';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { isWaterNeeded, getWaterNeedText } from '@/utils/orderUtils';
+import { getGoogleMapsApiKey, isGoogleMapsConfigured } from '@/utils/envUtils';
 
 const DetailRow = ({ icon: Icon, label, value, badge }) => (
   <div className="flex items-start gap-4 py-2">
@@ -89,11 +91,11 @@ export default function OrderDetails() {
   const [showCancelReason, setShowCancelReason] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const updateOrderStatusLoading = useSelector((state) => state.orders.updateOrderStatusLoading);
-  const [mapExpanded, setMapExpanded] = useState(false);
+    const [mapExpanded, setMapExpanded] = useState(false);
 
   // Google Maps setup
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'YOUR_GOOGLE_MAPS_API_KEY',
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: getGoogleMapsApiKey(),
   });
 
   // Example: fallback coordinates if not available
@@ -103,14 +105,14 @@ export default function OrderDetails() {
     ? { lat: Number(order.delivery_lat), lng: Number(order.delivery_lng) }
     : defaultCoords;
 
-  // Only show status update card for new/ongoing orders
+  // Show status update card for pending and ongoing orders (including cancel and delivered options)
   const canUpdateStatus = ['pending', 'assigned', 'picked up', 'out for delivery'].includes(String(order?.order_status).toLowerCase());
 
   // Prefer order.deliveryPartner, fallback to fetched partner
   const partnerData = order?.deliveryPartner || partner;
   // Fallback: find partner in deliveryPartners.list if only id is present
   let fallbackPartner = null;
-  if (order && order.delivery_partner_id && (!partnerData?.name || !partnerData?.phone)) {
+  if (order && order.delivery_partner_id && (!partnerData?.name || !partnerData?.phone) && Array.isArray(partnerList)) {
     fallbackPartner = partnerList.find(
       (p) => p.delivery_partner_id === order.delivery_partner_id || p.id === order.delivery_partner_id
     );
@@ -130,20 +132,14 @@ export default function OrderDetails() {
   // Debug: log the order object and delivery_partner_id
   useEffect(() => {
     if (order) {
-      // eslint-disable-next-line no-console
-      console.log('Order details loaded:', order);
-      // eslint-disable-next-line no-console
-      console.log('delivery_partner_id:', order.delivery_partner_id);
-      // eslint-disable-next-line no-console
-      console.log('payment_status:', order.payment_status, 'payment_verification:', order.payment_verification, 'isPaid:', isPaid, 'isPaymentVerified:', isPaymentVerified);
+      // Order details loaded
     }
   }, [order]);
 
   // Debug: log the fetched partner object
   useEffect(() => {
     if (partner) {
-      // eslint-disable-next-line no-console
-      console.log('Fetched partner:', partner);
+      // Partner fetched
     }
   }, [partner]);
 
@@ -181,8 +177,6 @@ export default function OrderDetails() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     // Log the full body section before dispatch
-    console.log('Updating customer address with body:', form);
-    console.log('Address being sent:', form.address);
     try {
       await dispatch(updateCustomerAddress(form)).unwrap();
       toast.success('Customer address updated!');
@@ -207,10 +201,10 @@ export default function OrderDetails() {
     e.preventDefault();
     if (!cancelReason.trim()) {
       toast.error('Please provide a cancellation reason.');
-      return;
+      return; 
     }
     try {
-      await dispatch(updateOrderStatusByShopOwner({ order_id: order.order_id, status: 'Cancelled', cancellation_reason: cancelReason })).unwrap();
+      await dispatch(updateOrderStatusByShopOwner({ order_id: order.order_id, status: 'cancelled', cancellation_reason: cancelReason })).unwrap();
       toast.success('Order cancelled!');
       setShowCancelReason(false);
       setCancelReason('');
@@ -220,12 +214,21 @@ export default function OrderDetails() {
     }
   };
 
-  if (loading && !order) return <AppSpinner label="Loading Order Details..." />;
-  if (error) return <ErrorMessage message={error} />;
+  if (loading && !order) return <LoadingSpinner size="large" message="Loading Order Details..." />;
+  if (error) return (
+    <ErrorMessage 
+      message={error} 
+      isNetworkError={isNetworkError(error)}
+      isServerError={isServerError(error)}
+      onRetry={() => dispatch(fetchOrderById(id))}
+    />
+  );
   if (!order) return <div>No order details found.</div>;
 
   return (
-    <div className="bg-pink-50 min-h-screen pt-16 pb-24 w-full">
+    <ErrorBoundary>
+      <NetworkErrorHandler>
+        <div className="bg-pink-50 min-h-screen pt-16 pb-24 w-full">
       <div className="max-w-screen-md mx-auto px-4">
         <PageHeader
           title="Order Details"
@@ -266,7 +269,21 @@ export default function OrderDetails() {
                 </GoogleMap>
               )}
               {!isLoaded && (
-                <div className="flex items-center justify-center h-full">Loading map...</div>
+                <div className="flex items-center justify-center h-full">
+                  {loadError || !isGoogleMapsConfigured() ? (
+                    <div className="text-center text-gray-500">
+                      <div className="text-sm mb-2">Map unavailable</div>
+                      <div className="text-xs">
+                        {!isGoogleMapsConfigured() ? 'API key not configured' : 'Check API key configuration'}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-500">
+                      <div className="text-sm mb-2">Loading map...</div>
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -318,8 +335,6 @@ export default function OrderDetails() {
               <span className={`text-xs px-2 py-1 rounded-full font-semibold ${order.urgency === 'Urgent' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{order.urgency?.toUpperCase()}</span>
             </div>
             {/* Debug: Log water value */}
-            {console.log('🌊 OrderDetails water:', order.water, typeof order.water, 'isWaterNeeded:', isWaterNeeded(order.water), 'Order ID:', order.order_id)}
-            {console.log('🌊 Full order object:', order)}
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs text-gray-500">Water Need:</span>
               <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
@@ -353,7 +368,7 @@ export default function OrderDetails() {
               <span className="bg-blue-500 rounded-full p-1 flex items-center justify-center"><FileText className="text-white" /></span> Order Items
             </h2>
             <div className="divide-y divide-blue-50">
-              {order.items.map((item, idx) => (
+              {Array.isArray(order.items) ? order.items.map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between py-2">
                   <div>
                     <div className="font-semibold text-black">{item.item_name}</div>
@@ -361,7 +376,7 @@ export default function OrderDetails() {
                   </div>
                   <div className="font-bold text-blue-600 text-base">₹{item.totalamount}</div>
                 </div>
-              ))}
+              )) : null}
             </div>
           </div>
         )}
@@ -463,7 +478,7 @@ export default function OrderDetails() {
         <div className="bg-white rounded-2xl shadow p-4 sm:p-5">
           <h2 className="text-base sm:text-lg font-bold text-black mb-4 flex items-center gap-3"><span className="bg-blue-500 rounded-full p-1 flex items-center justify-center"><Truck className="text-white" /></span> Delivery Partner Details</h2>
           {partnerLoading ? (
-            <AppSpinner label="Loading partner..." />
+            <LoadingSpinner size="medium" message="Loading partner..." />
           ) : partnerData ? (
             <>
               <div className="flex items-center gap-2 mb-2">
@@ -490,7 +505,7 @@ export default function OrderDetails() {
             </div>
           )}
         </div>
-           {/* Order Status Update Card (only for new/ongoing orders) */}
+           {/* Order Status Update Card (for pending and ongoing orders - includes cancel and delivered options) */}
     {canUpdateStatus && (
           <div className="bg-white rounded-2xl shadow p-3 sm:p-5 mb-4 mt-2 sm:mt-4">
             <h2 className="text-lg font-bold text-black mb-4 flex items-center gap-3">
@@ -566,6 +581,8 @@ export default function OrderDetails() {
           <Phone size={24} className="sm:w-7 sm:h-7" />
         </button>
       )}
-    </div>
+        </div>
+      </NetworkErrorHandler>
+    </ErrorBoundary>
   );
 }

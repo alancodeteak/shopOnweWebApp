@@ -1,23 +1,16 @@
 import React, { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { fetchPartnerById, updatePartner, resetBonusPenalty, resetPassword } from '@/store/slices/deliveryPartnerSlice';
-import AppSpinner from '@/components/AppSpinner';
+import { fetchPartnerById, updatePartner, resetBonusPenalty, resetPassword, fetchPartnerLocation } from '@/store/slices/deliveryPartnerSlice';
+import { LoadingSpinner, ErrorBoundary, NetworkErrorHandler } from '@/components';
 import ErrorMessage from '@/components/ErrorMessage';
-import { ArrowLeft, RefreshCw, Phone, Trash2, Edit2, Truck, BadgeCheck, User, Circle, Calendar, IdCard, Lock } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Phone, Trash2, Edit2, Truck, BadgeCheck, User, Circle, Calendar, IdCard, Lock, MapPin, Clock } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { ImageUpload, PasswordResetModal } from '@/components/forms';
-import { getErrorInfo } from '@/utils/errorHandler';
-
-// Helper function to construct proper image URLs
-const getImageUrl = (imagePath) => {
-  if (!imagePath) return null;
-  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-    return imagePath;
-  }
-  // If it's a relative path, construct the full URL
-  return `${import.meta.env.VITE_API_BASE_URL}${imagePath}`;
-};
+import { isNetworkError, isServerError } from '@/utils/errorHandler';
+import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
+import { getImageUrl, createInitialsAvatar } from '@/utils/imageUtils';
+import { getGoogleMapsApiKey, isGoogleMapsConfigured } from '@/utils/envUtils';
 
 export default function DeliveryPartnerDetails() {
   const { id } = useParams();
@@ -56,10 +49,29 @@ export default function DeliveryPartnerDetails() {
   // ImageUpload component handles existing images automatically
   const [partnerId, setPartnerId] = React.useState("");
   const [showPasswordResetModal, setShowPasswordResetModal] = React.useState(false);
+  const [mapExpanded, setMapExpanded] = React.useState(false);
   
   // Find partner in the list if current is null
-  const partnerInList = allPartners?.find(p => p.delivery_partner_id === id);
+  const partnerInList = Array.isArray(allPartners) ? allPartners.find(p => p.delivery_partner_id === id) : null;
   const displayPartner = partner || partnerInList;
+  
+  // Location data from Redux
+  const locationData = useSelector((state) => state.deliveryPartners.location);
+  const locationLoading = useSelector((state) => state.deliveryPartners.locationLoading);
+    const locationError = useSelector((state) => state.deliveryPartners.locationError);
+  
+  // Google Maps setup
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: getGoogleMapsApiKey(),
+  });
+  
+  // Default coordinates (Bangalore)
+  const defaultCoords = { lat: 12.8916, lng: 77.6051 };
+  
+  // Get partner coordinates from location data or fallback to default
+  const partnerCoords = locationData?.latitude && locationData?.longitude
+    ? { lat: Number(locationData.latitude), lng: Number(locationData.longitude) }
+    : defaultCoords;
   
 
 
@@ -69,10 +81,17 @@ export default function DeliveryPartnerDetails() {
       dispatch(fetchPartnerById(id));
     }
   }, [dispatch, id]);
+  
+  // Fetch partner location data
+  React.useEffect(() => {
+    if (id && displayPartner?.delivery_partner_id) {
+      dispatch(fetchPartnerLocation(id));
+    }
+  }, [dispatch, id, displayPartner]);
 
   // Pre-fill form in edit mode
   React.useEffect(() => {
-    if (isEdit && displayPartner) {
+    if (isEdit && displayPartner && displayPartner.delivery_partner_id) {
       setBasicInfo({
         first_name: displayPartner.first_name || '',
         last_name: displayPartner.last_name || '',
@@ -124,21 +143,19 @@ export default function DeliveryPartnerDetails() {
 
   // Early return for loading and error states
   if (loading) {
-    return <AppSpinner label={isEdit ? "Loading partner for edit..." : "Loading partner details..."} />;
+    return <LoadingSpinner size="large" message={isEdit ? "Loading partner for edit..." : "Loading partner details..."} />;
   }
   if (error && !partnerInList) {
-    const errorInfo = getErrorInfo(error);
     return (
       <ErrorMessage 
-        message={errorInfo.message}
-        statusCode={errorInfo.statusCode}
-        isNetworkError={errorInfo.isNetworkError}
-        isServerError={errorInfo.isServerError}
+        message={error}
+        isNetworkError={isNetworkError(error)}
+        isServerError={isServerError(error)}
         onRetry={() => dispatch(fetchPartnerById(id))}
       />
     );
   }
-  if (!displayPartner) {
+  if (!displayPartner || !displayPartner.delivery_partner_id) {
     return <div className="text-center py-12 text-gray-500">No partner data found.</div>;
   }
 
@@ -160,12 +177,7 @@ export default function DeliveryPartnerDetails() {
     
     const data = new FormData();
     
-    // Debug: Log what we're about to send
-    console.log('🔍 Form submission debug:');
-    console.log('dlFront type:', typeof dlFront, dlFront instanceof File ? 'File' : 'Not File');
-    console.log('dlBack type:', typeof dlBack, dlBack instanceof File ? 'File' : 'Not File');
-    console.log('aadhaarFront type:', typeof aadhaarFront, aadhaarFront instanceof File ? 'File' : 'Not File');
-    console.log('aadhaarBack type:', typeof aadhaarBack, aadhaarBack instanceof File ? 'File' : 'Not File');
+    // Form submission debug
     
     // Only send changed fields to the server
     if (basicInfo.first_name !== displayPartner.first_name) {
@@ -228,30 +240,17 @@ export default function DeliveryPartnerDetails() {
       });
     }
     
-    // Debug: Log what we're sending
-    console.log('📤 Sending FormData:');
-    console.log('FormData entries:');
-    for (let [key, value] of data.entries()) {
-      console.log(`${key}:`, value instanceof File ? `File: ${value.name} (${value.size} bytes)` : value);
-    }
-    
-    // Check if we have any image files
-    console.log('🔍 Image file check:');
-    console.log('newLicenseFiles.length:', newLicenseFiles.length);
-    console.log('newGovtIdFiles.length:', newGovtIdFiles.length);
-    console.log('profilePhoto:', profilePhoto ? `File: ${profilePhoto.name}` : 'null');
+    // Sending FormData
     
     dispatch(updatePartner({ id, formData: data }))
       .then((result) => {
         if (result.meta.requestStatus === 'fulfilled') {
-          console.log('✅ Update successful, refreshing partner data...');
           // Always fetch fresh data to ensure all images are loaded
           return dispatch(fetchPartnerById(id));
         }
       })
       .then((fetchResult) => {
         if (fetchResult?.meta?.requestStatus === 'fulfilled') {
-          console.log('✅ Partner data refreshed, navigating back...');
           navigate(`/delivery-partners/${id}`);
         }
       })
@@ -270,22 +269,15 @@ export default function DeliveryPartnerDetails() {
   };
 
   const handleResetPassword = async (newPassword) => {
-    console.log('🔐 Password reset initiated:', {
-      deliveryPartnerId: displayPartner.delivery_partner_id,
-      newPassword: newPassword ? '***' : 'undefined'
-    });
-    
     try {
       const result = await dispatch(resetPassword({ 
         deliveryPartnerId: displayPartner.delivery_partner_id, 
         newPassword 
       })).unwrap();
       
-      console.log('✅ Password reset successful:', result);
       setShowPasswordResetModal(false);
       // You can add a success toast here if needed
     } catch (error) {
-      console.error('❌ Password reset failed:', error);
       // Error is handled by the Redux slice
     }
   };
@@ -534,7 +526,9 @@ export default function DeliveryPartnerDetails() {
   const apiProfilePhotoUrl = displayPartner.photo_url;
 
   return (
-    <div className="bg-pink-50 min-h-screen pt-16 pb-24 px-2 sm:px-4">
+    <ErrorBoundary>
+      <NetworkErrorHandler>
+        <div className="bg-pink-50 min-h-screen pt-16 pb-24 px-2 sm:px-4">
 
       
       <PageHeader
@@ -544,14 +538,72 @@ export default function DeliveryPartnerDetails() {
         isLoading={loading}
       />
       <main className="max-w-screen-md mx-auto space-y-4 sm:space-y-6">
+        {/* Map Section */}
+        <div className="mb-2 sm:mb-4">
+          <div className="flex justify-end mb-2">
+            <button
+              className="z-20 bg-white shadow rounded-full px-4 py-2 text-blue-600 font-semibold hover:bg-blue-50 transition"
+              onClick={() => setMapExpanded((v) => !v)}
+              style={{ minWidth: 120 }}
+            >
+              {mapExpanded ? 'Hide Map' : 'Show Map'}
+            </button>
+          </div>
+          <div
+            className={`rounded-3xl shadow-lg bg-white overflow-hidden w-full transition-all duration-500 ${mapExpanded ? 'h-80' : 'h-40'}`}
+            style={{ minHeight: mapExpanded ? 320 : 160, padding: 0, margin: 0 }}
+          >
+            {isLoaded && (
+              <GoogleMap
+                mapContainerStyle={{ width: '100%', height: '100%' }}
+                center={partnerCoords}
+                zoom={16}
+                options={{
+                  fullscreenControl: false,
+                  mapTypeControl: false,
+                  streetViewControl: false,
+                }}
+              >
+                <Marker position={partnerCoords} />
+              </GoogleMap>
+            )}
+            {!isLoaded && (
+              <div className="flex items-center justify-center h-full">
+                {loadError || !isGoogleMapsConfigured() ? (
+                  <div className="text-center text-gray-500">
+                    <div className="text-sm mb-2">Map unavailable</div>
+                    <div className="text-xs">
+                      {!isGoogleMapsConfigured() ? 'API key not configured' : 'Check API key configuration'}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500">
+                    <div className="text-sm mb-2">Loading map...</div>
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {locationLoading && (
+            <div className="text-center text-sm text-gray-500 mt-2">Updating location...</div>
+          )}
+          {locationError && (
+            <div className="text-center text-sm text-red-500 mt-2">Location unavailable</div>
+          )}
+        </div>
+        
         {/* Profile Card */}
         <div className="bg-white rounded-2xl shadow p-4 sm:p-5 flex flex-col items-center relative">
           <div className="relative">
             <img 
-              src={getImageUrl(apiProfilePhotoUrl) || 'https://ui-avatars.com/api/?name=DP'} 
+              src={getImageUrl(apiProfilePhotoUrl) || createInitialsAvatar(displayPartner.first_name, displayPartner.last_name)} 
               alt={displayPartner.first_name} 
               className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-white shadow" 
-              onError={e => { e.target.onerror = null; e.target.src = 'https://ui-avatars.com/api/?name=DP'; }} 
+              onError={e => { 
+                e.target.onerror = null; 
+                e.target.src = createInitialsAvatar(displayPartner.first_name, displayPartner.last_name); 
+              }} 
             />
             {displayPartner.online_status === 'online' && (
               <span className="absolute bottom-1.5 right-1.5 sm:bottom-2 sm:right-2 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 border-2 border-white rounded-full"></span>
@@ -579,7 +631,6 @@ export default function DeliveryPartnerDetails() {
             <button 
               className="flex-1 bg-orange-500 text-white py-1.5 sm:py-2 rounded-lg flex items-center justify-center gap-1 sm:gap-2 font-bold shadow hover:bg-orange-600 text-xs sm:text-sm"
               onClick={() => {
-                console.log('🔘 Reset Password button clicked');
                 setShowPasswordResetModal(true);
               }}
             >
@@ -625,11 +676,62 @@ export default function DeliveryPartnerDetails() {
           </div>
         </div>
 
+        {/* Location Information Card */}
+        <div className="bg-white rounded-2xl shadow p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-bold text-sm sm:text-base">Location Information</div>
+            <button 
+              onClick={() => dispatch(fetchPartnerLocation(id))}
+              disabled={locationLoading}
+              className="bg-blue-400 text-white px-2 py-0.5 sm:px-3 sm:py-1 rounded-lg flex items-center gap-1 font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
+            >
+              <RefreshCw size={14} className={`sm:w-4 sm:h-4 ${locationLoading ? 'animate-spin' : ''}`} /> 
+              {locationLoading ? 'Updating...' : 'Refresh'}
+            </button>
+          </div>
+          {locationLoading && (
+            <div className="text-center text-sm text-gray-500 py-4">Updating location...</div>
+          )}
+          {locationError && (
+            <div className="text-center text-sm text-red-500 py-4">Location unavailable</div>
+          )}
+          {locationData && !locationLoading && !locationError && (
+            <div className="flex flex-col gap-2 sm:gap-3">
+              <div className="flex items-center gap-2">
+                <MapPin size={14} className="text-gray-400 sm:w-[16px] sm:h-[16px]" />
+                <span className="text-xs sm:text-sm">Latitude</span>
+                <span className="ml-auto bg-blue-100 text-blue-700 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">
+                  {Number(locationData.latitude).toFixed(6)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <MapPin size={14} className="text-gray-400 sm:w-[16px] sm:h-[16px]" />
+                <span className="text-xs sm:text-sm">Longitude</span>
+                <span className="ml-auto bg-blue-100 text-blue-700 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">
+                  {Number(locationData.longitude).toFixed(6)}
+                </span>
+              </div>
+              {locationData.last_updated && (
+                <div className="flex items-center gap-2">
+                  <Clock size={14} className="text-gray-400 sm:w-[16px] sm:h-[16px]" />
+                  <span className="text-xs sm:text-sm">Last Updated</span>
+                  <span className="ml-auto bg-green-100 text-green-700 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">
+                    {new Date(locationData.last_updated).toLocaleString()}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+          {!locationData && !locationLoading && !locationError && (
+            <div className="text-center text-sm text-gray-500 py-4">No location data available</div>
+          )}
+        </div>
+
         {/* Government ID Images */}
         <div className="bg-white rounded-2xl shadow p-4 sm:p-5">
           <div className="font-bold mb-2 text-sm sm:text-base">Government ID Images</div>
           <div className="grid grid-cols-2 gap-2 sm:gap-3">
-            {displayGovtIdImages.length > 0 ? (
+            {Array.isArray(displayGovtIdImages) && displayGovtIdImages.length > 0 ? (
               displayGovtIdImages.map((img, i) => (
                 <img 
                   key={i} 
@@ -652,7 +754,7 @@ export default function DeliveryPartnerDetails() {
         <div className="bg-white rounded-2xl shadow p-4 sm:p-5">
           <div className="font-bold mb-2 text-sm sm:text-base">License Images</div>
           <div className="grid grid-cols-2 gap-2 sm:gap-3">
-            {displayLicenseImages.length > 0 ? (
+            {Array.isArray(displayLicenseImages) && displayLicenseImages.length > 0 ? (
               displayLicenseImages.map((img, i) => (
                 <img 
                   key={i} 
@@ -703,8 +805,18 @@ export default function DeliveryPartnerDetails() {
         <div className="flex flex-col items-center mt-8 sm:mt-12 mb-4">
           <span className="text-[10px] sm:text-xs text-blue-500 mb-1">Powered by</span>
           <img src="/assets/codeteak-logo.png" alt="Codeteak Logo" className="h-3 sm:h-4 object-contain mt-1 md:mt-2" />
-        </div>
+        </div> 
       </main>
+
+      {/* Floating Location Refresh Button */}
+      <button
+        onClick={() => dispatch(fetchPartnerLocation(id))}
+        disabled={locationLoading}
+        className="fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-50 bg-blue-100 text-blue-700 shadow-lg rounded-full p-4 sm:p-5 flex items-center justify-center hover:bg-blue-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Refresh Location"
+      >
+        <RefreshCw size={24} className={`sm:w-7 sm:h-7 ${locationLoading ? 'animate-spin' : ''}`} />
+      </button>
 
       {/* Password Reset Modal */}
       <PasswordResetModal
@@ -716,6 +828,8 @@ export default function DeliveryPartnerDetails() {
         title="Reset Delivery Partner Password"
         partnerId={displayPartner?.delivery_partner_id}
       />
-    </div>
+        </div>
+      </NetworkErrorHandler>
+    </ErrorBoundary>
   );
 }

@@ -14,36 +14,16 @@ export const fetchOrdersByStatus = createAsyncThunk(
     };
     try {
       const endpoint = getEndpointForStatus(status, shopId, page, limit);
-      console.log(`Fetching ${status} orders from: ${endpoint}`);
       const res = await API.get(endpoint);
       
-      // Debug: Log the response data to see if water field is present
-      console.log(`🌊 ${status} orders API response:`, res.data);
-      if (res.data.data && Array.isArray(res.data.data)) {
-        console.log(`🌊 First ${status} order:`, res.data.data[0]);
-        console.log(`🌊 ${status} orders water field check:`, res.data.data.map(order => ({ 
-          order_id: order.order_id, 
-          water: order.water, 
-          has_water: 'water' in order 
-        })));
-      }
       if (status === 'completed') {
         // API returns { data: { orders: Array, page: number, totalPages: number } }
         const completedOrders = Array.isArray(res.data.data.orders) ? res.data.data.orders : [];
         
-        // Debug: Log completed orders data
-        console.log(`🌊 Completed orders API response:`, res.data);
-        console.log(`🌊 First completed order:`, completedOrders[0]);
-        console.log(`🌊 Completed orders water field check:`, completedOrders.map(order => ({ 
-          order_id: order.order_id, 
-          water: order.water, 
-          has_water: 'water' in order 
-        })));
-        
         return {
           data: completedOrders,
-          page: res.data.data.page || page,
-          totalPages: res.data.data.totalPages || 1,
+          page: res.data.data.current_page || page,
+          totalPages: res.data.data.total_pages || 1,
           status,
         };
       } else {
@@ -54,18 +34,36 @@ export const fetchOrdersByStatus = createAsyncThunk(
       // Handle different types of errors
       if (err.response?.status === 0 || err.message === 'Network Error') {
         const message = 'Network error. Please check your internet connection.';
-        return thunkAPI.rejectWithValue({ message, status });
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          status,
+          isNetworkError: true,
+          statusCode: 0
+        });
       }
       if (err.response?.status === 401) {
         const message = 'Authentication failed. Please login again.';
-        return thunkAPI.rejectWithValue({ message, status });
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          status,
+          statusCode: 401
+        });
       }
       if (err.response?.status === 403) {
         const message = 'Access denied. You do not have permission to view these orders.';
-        return thunkAPI.rejectWithValue({ message, status });
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          status,
+          statusCode: 403
+        });
       }
       const message = err.response?.data?.message || `Failed to fetch ${status} orders`;
-      return thunkAPI.rejectWithValue({ message, status });
+      return thunkAPI.rejectWithValue({ 
+        message, 
+        status,
+        isServerError: err.response?.status >= 500,
+        statusCode: err.response?.status
+      });
     }
   }
 );
@@ -145,15 +143,43 @@ export const fetchOrders = createAsyncThunk(
       const res = await API.get(
         `/orders/list?shop_id=${shopId}&page=${page}&limit=${limit}`
       );
+
       return {
         orders: res.data.data.orders,
-        page: res.data.data.page || page,
-        totalPages: res.data.data.totalPages || 1,
+        page: res.data.data.current_page || page,
+        totalPages: res.data.data.total_pages || 1,
       };
     } catch (err) {
-      return thunkAPI.rejectWithValue(
-        err?.response?.data?.message || "Failed to fetch orders"
-      );
+      console.error('Error fetching orders:', err);
+      // Handle different types of errors
+      if (err.response?.status === 0 || err.message === 'Network Error') {
+        const message = 'Network error. Please check your internet connection.';
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          isNetworkError: true,
+          statusCode: 0
+        });
+      }
+      if (err.response?.status === 401) {
+        const message = 'Authentication failed. Please login again.';
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          statusCode: 401
+        });
+      }
+      if (err.response?.status === 403) {
+        const message = 'Access denied. You do not have permission to view these orders.';
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          statusCode: 403
+        });
+      }
+      const message = err.response?.data?.message || "Failed to fetch orders";
+      return thunkAPI.rejectWithValue({ 
+        message, 
+        isServerError: err.response?.status >= 500,
+        statusCode: err.response?.status
+      });
     }
   }
 );
@@ -189,16 +215,12 @@ export const searchOrders = createAsyncThunk(
       }
       
       // Add filter parameters
-      if (filters.deliveryPartners?.length > 0) {
-        filters.deliveryPartners.forEach(partner => {
-          params.append('delivery_partners[]', partner);
-        });
+      if (filters.dpid) {
+        params.append('dpid', filters.dpid);
       }
       
-      if (filters.paymentModes?.length > 0) {
-        filters.paymentModes.forEach(mode => {
-          params.append('payment_modes[]', mode);
-        });
+      if (filters.payment_mode) {
+        params.append('payment_mode', filters.payment_mode);
       }
       
       if (filters.verificationStatus?.length > 0) {
@@ -207,18 +229,64 @@ export const searchOrders = createAsyncThunk(
         });
       }
       
-      const res = await API.get(`/orders/search?${params.toString()}`);
-      return {
-        orders: res.data.data.orders || res.data.data || [],
-        page: res.data.data.page || page,
-        totalPages: res.data.data.totalPages || 1,
-        query,
-        filters,
-      };
+      if (filters.status) {
+        params.append('status', filters.status);
+      }
+      
+      if (filters.start_date) {
+        params.append('start_date', filters.start_date);
+      }
+      
+      if (filters.end_date) {
+        params.append('end_date', filters.end_date);
+      }
+      
+              const res = await API.get(`/orders/search?${params.toString()}`);
+        
+        // Calculate totalPages from total count and limit
+        const total = res.data.data.total || 0;
+        const currentLimit = parseInt(limit);
+        const calculatedTotalPages = Math.ceil(total / currentLimit);
+        
+        return {
+          orders: res.data.data.orders || res.data.data || [],
+          page: res.data.data.page || page,
+          totalPages: calculatedTotalPages,
+          total: total,
+          query,
+          filters,
+        };
     } catch (err) {
-      return thunkAPI.rejectWithValue(
-        err?.response?.data?.message || "Failed to search orders"
-      );
+      console.error('Error searching orders:', err);
+      // Handle different types of errors
+      if (err.response?.status === 0 || err.message === 'Network Error') {
+        const message = 'Network error. Please check your internet connection.';
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          isNetworkError: true,
+          statusCode: 0
+        });
+      }
+      if (err.response?.status === 401) {
+        const message = 'Authentication failed. Please login again.';
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          statusCode: 401
+        });
+      }
+      if (err.response?.status === 403) {
+        const message = 'Access denied. You do not have permission to search these orders.';
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          statusCode: 403
+        });
+      }
+      const message = err.response?.data?.message || "Failed to search orders";
+      return thunkAPI.rejectWithValue({ 
+        message, 
+        isServerError: err.response?.status >= 500,
+        statusCode: err.response?.status
+      });
     }
   }
 );
@@ -258,19 +326,7 @@ export const createOrder = createAsyncThunk(
   "orders/create",
   async (orderPayload, thunkAPI) => {
     try {
-      // Debug: Log what's being sent to the API
-      console.log('🌊 Creating order with payload:', orderPayload);
-      if (orderPayload instanceof FormData) {
-        console.log('🌊 FormData entries:');
-        for (let [key, value] of orderPayload.entries()) {
-          console.log(`  ${key}:`, value);
-        }
-      }
-      
       const res = await API.post(`/orders/create`, orderPayload);
-      
-      // Debug: Log what's returned from the API
-      console.log('🌊 Order created successfully:', res.data.data);
       
       return res.data.data;
     } catch (err) {
@@ -317,7 +373,7 @@ export const updateOrderStatusByShopOwner = createAsyncThunk(
   async ({ order_id, status, cancellation_reason }, { rejectWithValue }) => {
     try {
       const body = { status };
-      if (status === 'Cancelled' && cancellation_reason) {
+      if (status.toLowerCase() === 'cancelled' && cancellation_reason) {
         body.cancellation_reason = cancellation_reason;
       }
       const response = await API.put(
@@ -338,13 +394,27 @@ const initialState = {
   created: null,
   loading: false, // General loading for non-status-specific actions
   error: null,
-  pagination: null,
+  pagination: {
+    currentPage: 1,
+    totalPages: 1,
+    total: 0,
+    limit: 10
+  },
   searchQuery: null, // Track current search query
   // Filter state
   activeFilters: {
     deliveryPartners: [],
     paymentModes: [],
     verificationStatus: [],
+  },
+  // UI Filter state for persistence
+  uiFilters: {
+    status: '',
+    deliveryPartner: '',
+    paymentMode: '',
+    startDate: '',
+    endDate: '',
+    paymentVerification: '' // for completed orders
   },
   availableFilters: {
     deliveryPartners: [],
@@ -362,6 +432,7 @@ const initialState = {
   completedOrders: [],
   completedOrdersLoading: false,
   completedOrdersError: null,
+  completedOrdersPagination: null,
   // Dedicated loading flag for urgency
   urgencyLoading: false,
   updateCustomerAddressLoading: false,
@@ -404,6 +475,9 @@ const ordersSlice = createSlice({
     clearSearchQuery: (state) => {
       state.searchQuery = null;
     },
+    setSearchQuery: (state, action) => {
+      state.searchQuery = action.payload;
+    },
     // Filter actions
     setFilter: (state, action) => {
       const { type, value } = action.payload;
@@ -432,6 +506,34 @@ const ordersSlice = createSlice({
         state.activeFilters[type] = [];
       }
     },
+    // UI Filter actions
+    setUIFilter: (state, action) => {
+      const { filterType, value } = action.payload;
+      state.uiFilters[filterType] = value;
+    },
+    clearUIFilters: (state) => {
+      state.uiFilters = {
+        status: '',
+        deliveryPartner: '',
+        paymentMode: '',
+        startDate: '',
+        endDate: '',
+        paymentVerification: ''
+      };
+    },
+    // Pagination actions
+    setCurrentPage: (state, action) => {
+      if (state.pagination) {
+        state.pagination.currentPage = action.payload;
+      } else {
+        state.pagination = { currentPage: action.payload, totalPages: 1, total: 0 };
+      }
+    },
+    resetPagination: (state) => {
+      if (state.pagination) {
+        state.pagination.currentPage = 1;
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -446,16 +548,16 @@ const ordersSlice = createSlice({
           ? action.payload.orders
           : [];
         state.pagination = {
-          page: action.payload.page || 1,
+          currentPage: action.payload.page || 1,
           totalPages: action.payload.totalPages || 1,
+          total: action.payload.total || 0,
+          limit: 10
         };
         state.searchQuery = null; // Clear search query when fetching all orders
         
         // Debug: Log the first order to see what fields are available
         if (state.list.length > 0) {
-          console.log('🌊 First order from API:', state.list[0]);
-          console.log('🌊 Available fields:', Object.keys(state.list[0]));
-          console.log('🌊 Water field value:', state.list[0].water);
+          // First order from API
         }
       })
       .addCase(fetchOrders.rejected, (state, action) => {
@@ -471,13 +573,13 @@ const ordersSlice = createSlice({
       .addCase(searchOrderById.fulfilled, (state, action) => {
         state.loading = false;
         state.list = action.payload ? [action.payload] : [];
-        state.pagination = { page: 1, totalPages: 1 };
+        state.pagination = { currentPage: 1, totalPages: 1, total: 0, limit: 10 };
       })
       .addCase(searchOrderById.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || "Order not found";
         state.list = [];
-        state.pagination = { page: 1, totalPages: 1 };
+        state.pagination = { currentPage: 1, totalPages: 1, total: 0, limit: 10 };
       })
 
       // Search orders with query
@@ -487,10 +589,15 @@ const ordersSlice = createSlice({
       })
       .addCase(searchOrders.fulfilled, (state, action) => {
         state.loading = false;
+        
+        // Replace orders for pagination (not accumulate)
         state.list = action.payload.orders;
+        
         state.pagination = {
-          page: action.payload.page || 1,
+          currentPage: action.payload.page || 1,
           totalPages: action.payload.totalPages || 1,
+          total: action.payload.total || 0,
+          limit: 10
         };
         state.searchQuery = action.payload.query;
         state.activeFilters = action.payload.filters || state.activeFilters;
@@ -499,7 +606,7 @@ const ordersSlice = createSlice({
         state.loading = false;
         state.error = action.payload || "Failed to search orders";
         state.list = [];
-        state.pagination = { page: 1, totalPages: 1 };
+        state.pagination = { currentPage: 1, totalPages: 1, total: 0, limit: 10 };
         state.searchQuery = null;
       })
 
@@ -544,10 +651,7 @@ const ordersSlice = createSlice({
         state.loading = false;
         state.current = action.payload;
         
-        // Debug: Log the order details to see what fields are available
-        console.log('🌊 Order details from API:', action.payload);
-        console.log('🌊 Available fields:', Object.keys(action.payload));
-        console.log('🌊 Water field value:', action.payload.water);
+        // Order details from API
       })
       .addCase(fetchOrderById.rejected, (state, action) => {
         state.loading = false;
@@ -622,7 +726,7 @@ const ordersSlice = createSlice({
         }
       })
       .addCase(fetchOrdersByStatus.fulfilled, (state, action) => {
-        const { status, data } = action.payload;
+        const { status, data, page } = action.payload;
         if (status === 'new') {
           state.newOrdersLoading = false;
           state.newOrders = data;
@@ -631,24 +735,38 @@ const ordersSlice = createSlice({
           state.ongoingOrders = data;
         } else if (status === 'completed') {
           state.completedOrdersLoading = false;
-          state.completedOrders = data;
+          // Proper infinite scroll: accumulate orders for pagination
+          if (page === 1) {
+            // First page: replace all orders
+            state.completedOrders = data;
+          } else {
+            // Subsequent pages: append new orders to existing ones
+            // Filter out duplicates based on order_id
+            const existingOrderIds = new Set((state.completedOrders || []).map(order => order.order_id));
+            const newOrders = data.filter(order => !existingOrderIds.has(order.order_id));
+            state.completedOrders = [...(state.completedOrders || []), ...newOrders];
+          }
           state.completedOrdersPagination = {
             page: action.payload.page || 1,
             totalPages: action.payload.totalPages || 1,
           };
+
         }
       })
       .addCase(fetchOrdersByStatus.rejected, (state, action) => {
-        const { status, message } = action.payload;
+        const errorPayload = action.payload;
+        const status = errorPayload?.status;
+        const message = errorPayload?.message || 'An error occurred';
+        
         if (status === 'new') {
           state.newOrdersLoading = false;
-          state.newOrdersError = message;
+          state.newOrdersError = errorPayload || message;
         } else if (status === 'ongoing') {
           state.ongoingOrdersLoading = false;
-          state.ongoingOrdersError = message;
+          state.ongoingOrdersError = errorPayload || message;
         } else if (status === 'completed') {
           state.completedOrdersLoading = false;
-          state.completedOrdersError = message;
+          state.completedOrdersError = errorPayload || message;
         }
       })
       
@@ -727,10 +845,15 @@ export const {
   updateUrgencyLocal, 
   clearCustomerSearch, 
   clearSearchQuery,
+  setSearchQuery,
   setFilter,
   removeFilter,
   clearAllFilters,
-  clearFilterType
+  clearFilterType,
+  setUIFilter,
+  clearUIFilters,
+  setCurrentPage,
+  resetPagination
 } = ordersSlice.actions;
 
 export default ordersSlice.reducer;

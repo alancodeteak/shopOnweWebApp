@@ -24,7 +24,8 @@ export default function OrderCard({ order, fromOngoing, paymentVerifiedLabel, sh
   };
 
   const getStatusText = () => {
-    return order.order_status === 'Completed' || order.order_status === 'Delivered' ? 'Completed' : 'Assigned';
+    // Return the actual order status instead of hardcoding "Assigned"
+    return order.order_status;
   };
 
   return (
@@ -42,8 +43,8 @@ export default function OrderCard({ order, fromOngoing, paymentVerifiedLabel, sh
         </div>
         <div className="flex flex-col items-end gap-1 min-w-[80px] sm:min-w-[90px]">
           <StatusBadge status={getStatusText()} size="sm" />
-          {/* Debug: Log water value */}
-          {console.log('🌊 OrderCard water:', order.water, typeof order.water, 'isWaterNeeded:', isWaterNeeded(order.water))}
+         
+         
           {isWaterNeeded(order.water) && (
             <div className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-semibold">
               <Droplets className="w-3 h-3" />
@@ -64,7 +65,6 @@ export default function OrderCard({ order, fromOngoing, paymentVerifiedLabel, sh
         <button
           onClick={(e) => {
             e.stopPropagation();
-            console.log('Calling...');
             toast.info('Calling feature coming soon!');
           }}
           className="bg-green-100 text-green-600 p-1.5 sm:p-2 rounded-full hover:bg-green-200 transition"

@@ -6,16 +6,16 @@
  */
 export const isWaterNeeded = (waterNeed) => {
   // Debug: Log the input value
-  console.log('🌊 isWaterNeeded input:', waterNeed, typeof waterNeed);
+  
   
   if (waterNeed === null || waterNeed === undefined) {
-    console.log('🌊 isWaterNeeded: null/undefined, returning false');
+    
     return false;
   }
   
   // Handle boolean values
   if (typeof waterNeed === 'boolean') {
-    console.log('🌊 isWaterNeeded: boolean value, returning:', waterNeed);
+   
     return waterNeed;
   }
   
@@ -23,18 +23,18 @@ export const isWaterNeeded = (waterNeed) => {
   if (typeof waterNeed === 'string') {
     const lowerValue = waterNeed.toLowerCase();
     const result = lowerValue === 'true' || lowerValue === 'yes' || lowerValue === '1';
-    console.log('🌊 isWaterNeeded: string value, returning:', result);
+    
     return result;
   }
   
   // Handle number values
   if (typeof waterNeed === 'number') {
     const result = waterNeed === 1;
-    console.log('🌊 isWaterNeeded: number value, returning:', result);
+   
     return result;
   }
   
-  console.log('🌊 isWaterNeeded: default case, returning false');
+  
   return false;
 };
 
@@ -45,8 +45,8 @@ export const isWaterNeeded = (waterNeed) => {
  */
 export const getWaterNeedText = (waterNeed) => {
   // Debug: Log the input value
-  console.log('🌊 getWaterNeedText input:', waterNeed, typeof waterNeed);
+ 
   const result = isWaterNeeded(waterNeed) ? 'YES' : 'NO';
-  console.log('🌊 getWaterNeedText result:', result);
+  
   return result;
 }; 

@@ -5,8 +5,8 @@ import PageHeader from '@/components/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { fetchPromotion, upsertPromotion, clearError, clearSuccess } from '@/store/slices/promotionsSlice';
 import { toast } from 'react-hot-toast';
-import AppSpinner from '@/components/AppSpinner';
-import ErrorMessage from '@/components/ErrorMessage';
+import { LoadingSpinner, ErrorMessage, ErrorBoundary, NetworkErrorHandler } from '@/components';
+import { isNetworkError, isServerError } from '@/utils/errorHandler';
 
 export default function Promotions() {
   const navigate = useNavigate();
@@ -34,9 +34,7 @@ export default function Promotions() {
   // Populate form with existing data when promotion is loaded
   useEffect(() => {
     if (promotion) {
-      console.log('🖼️ Promotion data loaded:', promotion);
-      console.log('🖼️ Existing image URL:', promotion.promotion_image);
-      console.log('🖼️ Current promotionImage state:', promotionImage);
+      
       
       setPromotionHeader(promotion.promotion_header || '');
       setPromotionContent(promotion.promotion_content || '');
@@ -44,7 +42,7 @@ export default function Promotions() {
       
       // Set existing image URL if available and no new image is selected
       if (promotion.promotion_image && !promotionImage) {
-        console.log('🖼️ Setting existing image URL:', promotion.promotion_image);
+       
         setPromotionImage(promotion.promotion_image);
       }
     }
@@ -83,8 +81,11 @@ export default function Promotions() {
       await dispatch(upsertPromotion(formData)).unwrap();
     } catch (err) {
       // Error is handled by the slice and displayed via toast
-      console.error('Failed to save promotion:', err);
     }
+  };
+
+  const handleRetry = () => {
+    dispatch(fetchPromotion());
   };
 
   // Show loading spinner while fetching data
@@ -93,14 +94,33 @@ export default function Promotions() {
       <div className="min-h-screen bg-blue-50 pt-16 pb-24">
         <div className="max-w-screen-md mx-auto px-4">
           <PageHeader title="Promotions" onBack={() => navigate(-1)} />
-          <AppSpinner label="Loading promotion..." />
+          <LoadingSpinner size="large" message="Loading promotion..." />
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-blue-50 pt-16 pb-24">
+        <div className="max-w-screen-md mx-auto px-4">
+          <PageHeader title="Promotions" onBack={() => navigate(-1)} />
+          <ErrorMessage 
+            message={error} 
+            isNetworkError={isNetworkError(error)}
+            isServerError={isServerError(error)}
+            onRetry={handleRetry}
+          />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-blue-50 pt-16 pb-24">
+    <ErrorBoundary>
+      <NetworkErrorHandler>
+        <div className="min-h-screen bg-blue-50 pt-16 pb-24">
       <div className="max-w-screen-md mx-auto px-4">
         <PageHeader title="Promotions" onBack={() => navigate(-1)} />
         
@@ -110,14 +130,7 @@ export default function Promotions() {
             {promotion ? 'Edit Promotion' : 'Create Promotion'}
           </h2>
           
-          {/* Debug Info */}
-          {promotion?.promotion_image && (
-            <div className="mb-4 p-3 bg-gray-100 rounded-lg text-xs">
-              <p><strong>Debug - Existing Image URL:</strong></p>
-              <p className="break-all">{promotion.promotion_image}</p>
-              <p><strong>Current promotionImage state:</strong> {promotionImage ? 'Set' : 'Not set'}</p>
-            </div>
-          )}
+         
           
           {/* Image Upload */}
           <ImageUpload
@@ -185,6 +198,8 @@ export default function Promotions() {
           <img src="/assets/codeteak-logo.png" alt="Codeteak Logo" className="h-4 object-contain mt-1 md:mt-2" />
         </div>
       </div>
-    </div>
+        </div>
+      </NetworkErrorHandler>
+    </ErrorBoundary>
   );
 } 

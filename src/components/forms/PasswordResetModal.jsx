@@ -20,7 +20,6 @@ export default function PasswordResetModal({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    console.log('📝 Password reset form submitted');
     setValidationError('');
 
     // Validation
@@ -39,7 +38,6 @@ export default function PasswordResetModal({
       return;
     }
 
-    console.log('✅ Password validation passed, calling onSubmit');
     // Submit
     onSubmit(newPassword);
   };

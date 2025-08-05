@@ -31,13 +31,23 @@ export const fetchAvailablePartners = createAsyncThunk(
 
 export const fetchAllPartners = createAsyncThunk(
   'deliveryPartners/fetchAll',
-  async (_, thunkAPI) => {
+  async ({ page = 1, limit = 10 } = {}, thunkAPI) => {
     try {
-      const res = await API.get('/delivery-partners/all', {
+      const res = await API.get(`/delivery-partners/all/?page=${page}&limit=${limit}`, {
         withCredentials: false, // 👈 Explicitly avoid sending cookies
       });
-      return res.data.data.partners;
+      
+      return {
+        partners: res.data.data.partners,
+        pagination: {
+          currentPage: res.data.data.page || page,
+          totalPages: res.data.data.total_pages || 1,
+          totalCount: res.data.data.total_count || 0,
+          limit: res.data.data.limit || limit
+        }
+      };
     } catch (err) {
+      console.error('🔍 Error fetching delivery partners:', err);
       return thunkAPI.rejectWithValue(
         err.response?.data?.message || 'Failed to fetch delivery partners'
       );
@@ -58,12 +68,7 @@ export const fetchPartnerById = createAsyncThunk(
       // Remove address and email from the response
       const { address, email, ...partnerDataWithoutAddressEmail } = res.data.data;
       
-      // Debug: Log image data being fetched
-      console.log('📸 FetchPartnerById - Image data:', {
-        license_images: partnerDataWithoutAddressEmail.license_images,
-        govt_id_images: partnerDataWithoutAddressEmail.govt_id_images,
-        photo_url: partnerDataWithoutAddressEmail.photo_url
-      });
+      // Image data being fetched
       
       return partnerDataWithoutAddressEmail;
     } catch (err) {
@@ -78,11 +83,14 @@ export const createPartner = createAsyncThunk(
   'deliveryPartners/create',
   async (formData, thunkAPI) => {
     try {
+      // FormData contents before sending
+      
       const res = await API.post('/delivery-partners/add', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       return res.data.data;
     } catch (err) {
+      console.error('❌ createPartner API Error:', err.response?.data || err.message);
       return thunkAPI.rejectWithValue(
         err.response?.data?.message || 'Failed to create partner'
       );
@@ -94,21 +102,10 @@ export const updatePartner = createAsyncThunk(
   'deliveryPartners/update',
   async ({ id, formData }, thunkAPI) => {
     try {
-      console.log('🔄 Redux updatePartner - FormData contents:');
-      for (let [key, value] of formData.entries()) {
-        console.log(`${key}:`, value instanceof File ? `File: ${value.name} (${value.size} bytes)` : value);
-      }
-      
       const res = await API.put(`/delivery-partners/${id}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       
-      console.log('✅ API Response:', res.data);
-      console.log('📸 Image data in response:', {
-        license_images: res.data.data?.license_images,
-        govt_id_images: res.data.data?.govt_id_images,
-        photo_url: res.data.data?.photo_url
-      });
       return res.data.data;
     } catch (err) {
       console.error('❌ API Error:', err.response?.data || err.message);
@@ -154,14 +151,34 @@ export const resetPassword = createAsyncThunk(
   'deliveryPartners/resetPassword',
   async ({ deliveryPartnerId, newPassword }, thunkAPI) => {
     try {
-      const res = await API.post('/delivery-partner/auth/reset-password', {
-        deliveryPartnerId,
-        newPassword
+      const res = await API.put(`/delivery-partners/reset-password/${deliveryPartnerId}`, {
+        new_password: newPassword,
       });
+      
       return res.data;
     } catch (err) {
+      console.error('❌ Redux resetPassword - API Error:', err.response?.data || err.message);
       return thunkAPI.rejectWithValue(
         err?.response?.data?.message || 'Failed to reset password'
+      );
+    }
+  }
+);
+
+export const fetchPartnerLocation = createAsyncThunk(
+  'deliveryPartners/fetchLocation',
+  async (partnerId, thunkAPI) => {
+    try {
+      const res = await API.get(`/tracking/partner/${partnerId}`);
+      
+      if (!res.data || !res.data.data) {
+        return thunkAPI.rejectWithValue('Invalid API response format');
+      }
+      
+      return res.data.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(
+        err.response?.data?.message || err.message || 'Failed to fetch partner location'
       );
     }
   }
@@ -183,6 +200,15 @@ const initialState = {
   resetBonusPenaltyError: null,
   resettingPassword: false,
   resetPasswordError: null,
+  location: null,
+  locationLoading: false,
+  locationError: null,
+  pagination: {
+    currentPage: 1,
+    totalPages: 1,
+    totalCount: 0,
+    limit: 10
+  }
 };
 
 const deliveryPartnerSlice = createSlice({
@@ -196,6 +222,19 @@ const deliveryPartnerSlice = createSlice({
       state.updating = false;
       state.updateSuccess = false;
       state.error = null;
+    },
+    // Pagination actions
+    setCurrentPage: (state, action) => {
+      if (state.pagination) {
+        state.pagination.currentPage = action.payload;
+      } else {
+        state.pagination = { currentPage: action.payload, totalPages: 1, totalCount: 0, limit: 10 };
+      }
+    },
+    resetPagination: (state) => {
+      if (state.pagination) {
+        state.pagination.currentPage = 1;
+      }
     },
   },
   extraReducers: (builder) => {
@@ -218,7 +257,8 @@ const deliveryPartnerSlice = createSlice({
       })
       .addCase(fetchAllPartners.fulfilled, (state, action) => {
         state.loading = false;
-        state.list = action.payload;
+        state.list = action.payload.partners;
+        state.pagination = action.payload.pagination;
       })
       .addCase(fetchAllPartners.rejected, (state, action) => {
         state.loading = false;
@@ -308,9 +348,21 @@ const deliveryPartnerSlice = createSlice({
       .addCase(resetPassword.rejected, (state, action) => {
         state.resettingPassword = false;
         state.resetPasswordError = action.payload;
+      })
+      .addCase(fetchPartnerLocation.pending, (state) => {
+        state.locationLoading = true;
+        state.locationError = null;
+      })
+      .addCase(fetchPartnerLocation.fulfilled, (state, action) => {
+        state.locationLoading = false;
+        state.location = action.payload;
+      })
+      .addCase(fetchPartnerLocation.rejected, (state, action) => {
+        state.locationLoading = false;
+        state.locationError = action.payload;
       });
   },
 });
 
-export const { clearCurrentPartner, resetUpdateStatus } = deliveryPartnerSlice.actions;
+export const { clearCurrentPartner, resetUpdateStatus, setCurrentPage, resetPagination } = deliveryPartnerSlice.actions;
 export default deliveryPartnerSlice.reducer;

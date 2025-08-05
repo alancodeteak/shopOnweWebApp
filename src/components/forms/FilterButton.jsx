@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Filter, X } from 'lucide-react';
 import { useSelector, useDispatch } from 'react-redux';
+import { LoadingSpinner } from '@/components';
 import { setFilter, removeFilter, clearAllFilters } from '@/store/slices/ordersSlice';
 
 export default function FilterButton() {
@@ -13,7 +14,7 @@ export default function FilterButton() {
   const filtersLoading = useSelector((state) => state.orders.filtersLoading);
 
   // Calculate total active filters
-  const totalActiveFilters = Object.values(activeFilters).reduce((sum, filters) => sum + filters.length, 0);
+  const totalActiveFilters = Object.values(activeFilters).reduce((sum, filters) => sum + (Array.isArray(filters) ? filters.length : 0), 0);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -42,7 +43,7 @@ export default function FilterButton() {
   const getFilterLabel = (type, value) => {
     switch (type) {
       case 'deliveryPartners':
-        const partner = availableFilters.deliveryPartners.find(p => p.id === value || p.delivery_partner_id === value);
+        const partner = Array.isArray(availableFilters.deliveryPartners) ? availableFilters.deliveryPartners.find(p => p.id === value || p.delivery_partner_id === value) : null;
         return partner?.name || partner?.delivery_partner_name || value;
       case 'paymentModes':
         return value;
@@ -85,8 +86,7 @@ export default function FilterButton() {
 
             {filtersLoading ? (
               <div className="text-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="text-sm text-gray-500 mt-2">Loading filters...</p>
+                <LoadingSpinner size="small" message="Loading filters..." />
               </div>
             ) : (
               <div className="space-y-4">
@@ -94,7 +94,7 @@ export default function FilterButton() {
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Delivery Partners</h4>
                   <div className="space-y-2 max-h-32 overflow-y-auto">
-                    {availableFilters.deliveryPartners.map((partner) => {
+                    {Array.isArray(availableFilters.deliveryPartners) ? availableFilters.deliveryPartners.map((partner) => {
                       const value = partner.id || partner.delivery_partner_id;
                       const label = partner.name || partner.delivery_partner_name;
                       return (
@@ -108,7 +108,9 @@ export default function FilterButton() {
                           <span className="ml-2 text-sm text-gray-700">{label}</span>
                         </label>
                       );
-                    })}
+                    }) : (
+                      <div className="text-sm text-gray-500">No delivery partners available</div>
+                    )}
                   </div>
                 </div>
 
@@ -116,7 +118,7 @@ export default function FilterButton() {
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Payment Modes</h4>
                   <div className="space-y-2">
-                    {availableFilters.paymentModes.map((mode) => (
+                    {Array.isArray(availableFilters.paymentModes) ? availableFilters.paymentModes.map((mode) => (
                       <label key={mode} className="flex items-center">
                         <input
                           type="checkbox"
@@ -126,7 +128,9 @@ export default function FilterButton() {
                         />
                         <span className="ml-2 text-sm text-gray-700">{mode}</span>
                       </label>
-                    ))}
+                    )) : (
+                      <div className="text-sm text-gray-500">No payment modes available</div>
+                    )}
                   </div>
                 </div>
 

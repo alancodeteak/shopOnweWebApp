@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { updateOrderUrgency } from '@/store/slices/ordersSlice';
 import { ArrowLeft, AlertTriangle } from 'lucide-react';
-import AppSpinner from '@/components/AppSpinner';
+import { LoadingSpinner } from '@/components';
 
 const UrgencyBanner = ({ orderId }) => {
     const dispatch = useDispatch();
@@ -15,7 +15,7 @@ const UrgencyBanner = ({ orderId }) => {
         dispatch(updateOrderUrgency({ orderId, urgency: newUrgency }));
     }, [dispatch, orderId, urgency]);
 
-    if (urgencyLoading) return <AppSpinner label="Updating urgency..." />;
+    if (urgencyLoading) return <LoadingSpinner size="small" message="Updating urgency..." />;
     if (!urgency) return null;
 
     const isUrgent = urgency === 'Urgent';

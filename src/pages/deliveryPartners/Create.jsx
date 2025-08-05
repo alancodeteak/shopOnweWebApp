@@ -1,17 +1,13 @@
-import { useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
-import { generatePartnerId, createPartner } from "@/store/slices/deliveryPartnerSlice";
-import { toast } from "react-toastify";
-import { User, Mail, Phone, Calendar, Eye, EyeOff, Camera, RefreshCw, IdCard } from 'lucide-react';
-import PageHeader from '@/components/PageHeader';
-import PageContainer from '@/components/PageContainer';
-import { 
-  FormInput, 
-  FormButton, 
-  ImageUpload, 
-  FormStepper 
-} from '@/components/forms';
+import React, { useState, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+import { createPartner, generatePartnerId } from '@/store/slices/deliveryPartnerSlice';
+import { PageContainer, PageHeader, ErrorMessage, ErrorBoundary, NetworkErrorHandler } from '@/components';
+import { FormInput, FormTextarea, FormButton, ImageUpload } from '@/components/forms';
+import { isNetworkError, isServerError } from '@/utils/errorHandler';
+import { Eye, RefreshCw } from 'lucide-react';
+import Lottie from 'lottie-react';
+import toast from 'react-hot-toast';
 
 const ageOptions = Array.from({ length: 43 }, (_, i) => 18 + i);
 
@@ -31,7 +27,6 @@ export default function CreateDeliveryPartner() {
     last_name: "",
     age: "",
     phone1: "",
-    phone2: "",
     email: "",
     address: "",
   });
@@ -47,6 +42,8 @@ export default function CreateDeliveryPartner() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [partnerId, setPartnerId] = useState("");
+  const [animationData, setAnimationData] = useState(null);
+  const [animationError, setAnimationError] = useState(null);
 
   useEffect(() => {
     if (shopId) {
@@ -54,16 +51,42 @@ export default function CreateDeliveryPartner() {
     }
   }, [dispatch, shopId]);
 
+  // Load animation data
+  useEffect(() => {
+    const loadAnimation = async () => {
+      try {
+        const response = await fetch('/animations/Delivery.json');
+        if (!response.ok) {
+          throw new Error(`Failed to load animation: ${response.status}`);
+        }
+        const data = await response.json();
+        setAnimationData(data);
+        setAnimationError(null);
+      } catch (error) {
+        setAnimationError(error.message);
+      }
+    };
+    
+    loadAnimation();
+  }, []);
+
   useEffect(() => {
     if (generatedId) {
       setPartnerId(generatedId);
     }
   }, [generatedId]);
   
+  // Success state for showing animation after creation
+  const [showSuccess, setShowSuccess] = useState(false);
+
   useEffect(() => {
       if (created) {
-          toast.success("Delivery partner created successfully!");
-          navigate("/delivery-partners");
+          setShowSuccess(true);
+          // Show animation for 3 seconds before redirecting
+          setTimeout(() => {
+              toast.success("Delivery partner created successfully!");
+              navigate("/delivery-partners");
+          }, 3000);
       }
   }, [created, navigate]);
 
@@ -75,6 +98,7 @@ export default function CreateDeliveryPartner() {
     basicInfo.age &&
     basicInfo.phone1.trim().length === 10 &&
     basicInfo.address.trim();
+
 
   const isDocumentsValid =
     licenseNo.trim() &&
@@ -115,21 +139,79 @@ export default function CreateDeliveryPartner() {
     data.append("last_name", basicInfo.last_name);
     data.append("age", basicInfo.age);
     data.append("phone1", basicInfo.phone1);
-    data.append("phone2", basicInfo.phone2);
     data.append("email", basicInfo.email);
     data.append("address", basicInfo.address);
     data.append("photo", profilePhoto);
     data.append("license_no", licenseNo);
-    data.append("license_image", JSON.stringify([dlFront, dlBack]));
-    data.append("govt_id_image", JSON.stringify([aadhaarFront, aadhaarBack]));
+    
+    // Append license images as individual files (matching Details.jsx pattern)
+    if (dlFront) data.append("license_image", dlFront);
+    if (dlBack) data.append("license_image", dlBack);
+    
+    // Append government ID images as individual files
+    if (aadhaarFront) data.append("govt_id_image", aadhaarFront);
+    if (aadhaarBack) data.append("govt_id_image", aadhaarBack);
+    
     data.append("password", password);
     data.append("delivery_partner_id", partnerId);
     data.append("shop_id", shopId);
+    
+    
     dispatch(createPartner(data));
   };
 
+    // Show success animation after creating partner
+  if (showSuccess) {
+    return (
+      <PageContainer>
+        <div className="flex flex-col items-center justify-center min-h-[80vh] bg-white rounded-lg shadow-md p-8">
+          <div className="w-80 h-80 mb-8">
+            {animationError ? (
+              <div className="flex items-center justify-center h-full text-red-500">
+                <p>Animation failed to load: {animationError}</p>
+              </div>
+            ) : animationData ? (
+              <Lottie
+                animationData={animationData}
+                loop={true}
+                autoplay={true}
+              />
+            ) : (
+              <LoadingSpinner size="medium" showMessage={false} />
+            )}
+          </div>
+          <h3 className="text-2xl font-bold text-green-600 mb-4">🎉 Delivery Partner Created!</h3>
+          <p className="text-gray-600 text-center max-w-md mb-6">
+            Your delivery partner account has been successfully created and is ready to start delivering orders.
+          </p>
+          <div className="flex items-center gap-2 text-blue-600">
+            <LoadingSpinner size="small" message="Redirecting to delivery partners list..." showMessage={false} />
+            <span className="text-sm">Redirecting to delivery partners list...</span>
+          </div>
+        </div>
+      </PageContainer>
+    );
+  }
+
+  // Show loading spinner when creating partner
+  if (loading && step === 2) {
+    return (
+      <PageContainer>
+        <PageHeader title="Add Partner" onBack={() => navigate(-1)} />
+        <div className="flex flex-col items-center justify-center min-h-[60vh] bg-white rounded-lg shadow-md p-8">
+          <LoadingSpinner size="large" message="Creating Delivery Partner" />
+          <p className="text-gray-600 text-center max-w-md mt-4">
+            Please wait while we create your delivery partner account. This may take a few moments.
+          </p>
+        </div>
+      </PageContainer>
+    );
+  }
+
   return (
-    <PageContainer>
+    <ErrorBoundary>
+      <NetworkErrorHandler>
+        <PageContainer>
       <PageHeader title="Add Partner" onBack={() => (step === 1 ? navigate(-1) : handleBack())} />
       
       {/* Stepper */}
@@ -140,6 +222,7 @@ export default function CreateDeliveryPartner() {
 
       {step === 1 && (
         <form onSubmit={handleNext} className="space-y-4 bg-white p-6 rounded-lg shadow-md">
+
           {/* Profile Photo Upload */}
           <div className="flex flex-col items-center mb-2">
             <ImageUpload
@@ -163,6 +246,7 @@ export default function CreateDeliveryPartner() {
             onChange={handleBasicChange}
             required
           />
+          {!basicInfo.first_name.trim() && <div className="text-xs text-red-500 -mt-2">First name is required</div>}
 
           <FormInput
             icon={User}
@@ -172,6 +256,7 @@ export default function CreateDeliveryPartner() {
             onChange={handleBasicChange}
             required
           />
+          {!basicInfo.last_name.trim() && <div className="text-xs text-red-500 -mt-2">Last name is required</div>}
 
           <div className="relative">
             <Calendar className="absolute left-3 top-3 text-gray-400" size={18} />
@@ -186,6 +271,7 @@ export default function CreateDeliveryPartner() {
               {ageOptions.map(age => <option key={age} value={age}>{age}</option>)}
             </select>
           </div>
+          {!basicInfo.age && <div className="text-xs text-red-500 -mt-2">Age is required</div>}
 
           <FormInput
             icon={Phone}
@@ -197,22 +283,14 @@ export default function CreateDeliveryPartner() {
             required
             maxLength={10}
           />
-
-          <FormInput
-            icon={Phone}
-            name="phone2"
-            type="tel"
-            placeholder="Secondary Phone Number (Optional)"
-            value={basicInfo.phone2}
-            onChange={handleBasicChange}
-            maxLength={10}
-          />
+          {basicInfo.phone1.trim().length !== 10 && basicInfo.phone1.trim() && <div className="text-xs text-red-500 -mt-2">Phone number must be 10 digits</div>}
+          {!basicInfo.phone1.trim() && <div className="text-xs text-red-500 -mt-2">Phone number is required</div>}
 
           <FormInput
             icon={Mail}
             name="email"
-            type="email"
-            placeholder="Email"
+            type="text"
+            placeholder="Email (Optional)"
             value={basicInfo.email}
             onChange={handleBasicChange}
           />
@@ -234,6 +312,23 @@ export default function CreateDeliveryPartner() {
               required
             />
           </div>
+          {!basicInfo.address.trim() && <div className="text-xs text-red-500 -mt-2">Address is required</div>}
+
+          {/* Validation Summary */}
+          {!isBasicInfoValid && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+              <div className="text-sm font-medium text-red-800 mb-2">Please complete the following:</div>
+              <ul className="text-xs text-red-700 space-y-1">
+                {!profilePhoto && <li>• Upload a profile photo</li>}
+                {!basicInfo.first_name.trim() && <li>• Enter first name</li>}
+                {!basicInfo.last_name.trim() && <li>• Enter last name</li>}
+                {!basicInfo.age && <li>• Select age</li>}
+                {!basicInfo.phone1.trim() && <li>• Enter phone number</li>}
+                {basicInfo.phone1.trim() && basicInfo.phone1.trim().length !== 10 && <li>• Phone number must be 10 digits</li>}
+                {!basicInfo.address.trim() && <li>• Enter address</li>}
+              </ul>
+            </div>
+          )}
 
           <FormButton
             type="submit"
@@ -248,6 +343,7 @@ export default function CreateDeliveryPartner() {
 
       {step === 2 && (
         <form onSubmit={handleSubmit} className="space-y-4 bg-white p-6 rounded-lg shadow-md">
+
           <FormInput
             icon={IdCard}
             label="License Number"
@@ -358,10 +454,22 @@ export default function CreateDeliveryPartner() {
             fullWidth
             className={isDocumentsValid ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-200 cursor-not-allowed'}
           >
-            Submit
+            {loading ? 'Creating Partner...' : 'Submit'}
           </FormButton>
           
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+          {error && (
+            <div className="mt-4">
+              <ErrorMessage 
+                message={error} 
+                isNetworkError={isNetworkError(error)}
+                isServerError={isServerError(error)}
+                onRetry={() => {
+                  // Retry logic for create partner would go here
+                  // For now, just clear the error
+                }}
+              />
+            </div>
+          )}
         </form>
       )}
       
@@ -370,6 +478,8 @@ export default function CreateDeliveryPartner() {
         <span className="text-xs text-blue-500 mb-1">Powered by</span>
         <img src="/assets/codeteak-logo.png" alt="Codeteak Logo" className="h-4 object-contain mt-1 md:mt-2" />
       </div>
-    </PageContainer>
+        </PageContainer>
+      </NetworkErrorHandler>
+    </ErrorBoundary>
   );
 } 

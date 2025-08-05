@@ -3,17 +3,18 @@ import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import TabBar from '@/components/Topbar';
 import OrderCard from '@/components/OrderCard';
-import AppSpinner from '@/components/AppSpinner';
+import { LoadingSpinner, ErrorBoundary, NetworkErrorHandler } from '@/components';
 import ErrorMessage from '@/components/ErrorMessage';
 import TicketCard from '@/components/TicketCard';
 import PageHeader from '@/components/PageHeader';
 import PageContainer from '@/components/PageContainer';
 import EmptyState from '@/components/EmptyState';
-import { Package, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Package, Clock, AlertTriangle } from 'lucide-react';
 import { useOrders, useTickets } from '@/hooks';
+import { isNetworkError, isServerError } from '@/utils/errorHandler';
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState('Ongoing');
+  const [activeTab, setActiveTab] = useState('New Orders');
   const shopId = useSelector((state) => state.auth.user?.shopId);
 
   // Use specialized hooks
@@ -24,9 +25,7 @@ export default function Dashboard() {
     ongoingOrders,
     ongoingOrdersLoading,
     ongoingOrdersError,
-    completedOrders,
-    completedOrdersLoading,
-    completedOrdersError,
+    fetchOrders,
   } = useOrders(shopId);
 
   const {
@@ -36,19 +35,59 @@ export default function Dashboard() {
     acceptTicket,
     rejectTicket,
     callPartner,
+    fetchTickets,
   } = useTickets();
+
+  // Fetch orders when tab changes
+  useEffect(() => {
+    if (shopId) {
+      if (activeTab === 'New Orders') {
+        fetchOrders('new');
+      } else if (activeTab === 'Ongoing') {
+        fetchOrders('ongoing');
+      }
+    }
+  }, [activeTab, shopId, fetchOrders]);
 
   // Load tickets when tab is active
   useEffect(() => {
     if (activeTab === 'Tickets') {
-      // Tickets are loaded automatically by the hook
+      fetchTickets();
     }
-  }, [activeTab]);
+  }, [activeTab, fetchTickets]);
 
-  const renderOrdersList = (orders, loading, error, emptyMessage, icon) => {
-    if (loading) return <AppSpinner label={`Loading ${activeTab.toLowerCase()}...`} />;
-    if (error) return <ErrorMessage message={error} />;
-    if (!orders?.length) {
+  const handleRetry = (orderType) => {
+    if (shopId) {
+      fetchOrders(orderType.toLowerCase().replace(' ', ''));
+    }
+  };
+
+  const renderOrdersList = (orders, loading, error, emptyMessage, icon, orderType) => {
+    if (loading) return <LoadingSpinner size="large" message={`Loading ${activeTab.toLowerCase()}...`} />;
+    if (error) return (
+      <ErrorMessage 
+        message={error} 
+        isNetworkError={isNetworkError(error)}
+        isServerError={isServerError(error)}
+        onRetry={() => handleRetry(orderType)}
+      />
+    );
+    
+    // Filter orders based on active tab
+    let filteredOrders = Array.isArray(orders) ? orders : [];
+    if (activeTab === 'New Orders' && Array.isArray(orders)) {
+      // Only show pending orders in New Orders tab
+      filteredOrders = orders.filter(order => order.order_status === 'Pending');
+    } else if (activeTab === 'Ongoing' && Array.isArray(orders)) {
+      // Show all orders except pending and completed/delivered in Ongoing tab
+      filteredOrders = orders.filter(order => 
+        order.order_status !== 'Pending' && 
+        order.order_status !== 'Completed' && 
+        order.order_status !== 'Delivered'
+      );
+    }
+    
+    if (!filteredOrders.length) {
       return (
         <EmptyState
           icon={icon}
@@ -59,7 +98,7 @@ export default function Dashboard() {
     }
     return (
       <div className="space-y-3">
-        {orders.map((order) => (
+        {filteredOrders.map((order) => (
           <OrderCard 
             key={order.order_id} 
             order={order} 
@@ -71,7 +110,9 @@ export default function Dashboard() {
   };
 
   return (
-    <PageContainer>
+    <ErrorBoundary>
+      <NetworkErrorHandler>
+        <PageContainer>
       <PageHeader title="Dashboard" />
       <TabBar activeTab={activeTab} setActiveTab={setActiveTab} pillSize="small" />
 
@@ -81,7 +122,8 @@ export default function Dashboard() {
           newOrdersLoading, 
           newOrdersError, 
           'No New Orders', 
-          Package
+          Package,
+          'New Orders'
         )
       }
 
@@ -91,25 +133,23 @@ export default function Dashboard() {
           ongoingOrdersLoading, 
           ongoingOrdersError, 
           'No Ongoing Orders', 
-          Clock
-        )
-      }
-
-      {activeTab === 'Completed' && 
-        renderOrdersList(
-          completedOrders, 
-          completedOrdersLoading, 
-          completedOrdersError, 
-          'No Completed Orders', 
-          CheckCircle
+          Clock,
+          'Ongoing'
         )
       }
 
       {activeTab === 'Tickets' && (
         <>
-          {ticketsLoading && <AppSpinner label="Loading tickets..." />}
-          {ticketsError && <ErrorMessage message={ticketsError} />}
-          {tickets?.length > 0 ? (
+          {ticketsLoading && <LoadingSpinner size="large" message="Loading tickets..." />}
+          {ticketsError && (
+            <ErrorMessage 
+              message={ticketsError} 
+              isNetworkError={isNetworkError(ticketsError)}
+              isServerError={isServerError(ticketsError)}
+              onRetry={fetchTickets}
+            />
+          )}
+          {Array.isArray(tickets) && tickets.length > 0 ? (
             <div className="space-y-3">
               {tickets.map((ticket) => (
                 <TicketCard
@@ -132,6 +172,8 @@ export default function Dashboard() {
           )}
         </>
       )}
-    </PageContainer>
+        </PageContainer>
+      </NetworkErrorHandler>
+    </ErrorBoundary>
   );
 }

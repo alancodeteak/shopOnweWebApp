@@ -22,9 +22,7 @@ export const ticketAction = createAsyncThunk(
     try {
       const url = `/tickets/${ticketId}/action`;
       const body = { action, resolution_notes };
-      console.log('ticketId:', ticketId, 'url:', url, 'body:', body, 'baseURL:', API.defaults.baseURL);
       const response = await API.put(url, body);
-      console.log('response:', response);
       toast.success(`Ticket ${action === 'accept' ? 'accepted' : 'rejected'} successfully!`);
       return { ticketId, action };
     } catch (err) {

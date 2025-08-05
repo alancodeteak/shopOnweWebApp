@@ -25,7 +25,7 @@ export default function OrderItemsList({
         </FormButton>
       </div>
       
-      {items.map((item, idx) => (
+      {Array.isArray(items) ? items.map((item, idx) => (
         <div key={idx} className="flex gap-2 mb-2 items-end w-full">
           <input
             type="text"
@@ -54,7 +54,7 @@ export default function OrderItemsList({
           <span className="w-20 text-xs text-blue-500 font-bold">
             {item.totalamount ? `₹${item.totalamount}` : ''}
           </span>
-          {items.length > 1 && (
+          {Array.isArray(items) && items.length > 1 && (
             <button
               type="button"
               className="p-1 bg-red-500 rounded-full hover:bg-red-600 transition"
@@ -64,7 +64,7 @@ export default function OrderItemsList({
             </button>
           )}
         </div>
-      ))}
+      )) : null}
       
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
     </div>

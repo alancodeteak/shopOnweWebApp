@@ -4,7 +4,40 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React</title>
+    
+    <!-- Security Meta Tags -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()" />
+    
+    <!-- Hide Application Information -->
+    <meta name="generator" content="" />
+    <meta name="application-name" content="Shop Management" />
+    
+    <!-- Basic Security Protection (Non-intrusive) -->
+    <script>
+      // Only disable right click on production
+      if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        document.addEventListener('contextmenu', function(e) {
+          e.preventDefault();
+        });
+      }
+      
+      // Only block keyboard shortcuts on production
+      if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'F12' || 
+              (e.ctrlKey && e.shiftKey && e.key === 'I') ||
+              (e.ctrlKey && e.key === 'u')) {
+            e.preventDefault();
+            return false;
+          }
+        });
+      }
+    </script>
+    
+    <title>Shop Management System</title>
   </head>
   <body>
     <div id="root"></div>

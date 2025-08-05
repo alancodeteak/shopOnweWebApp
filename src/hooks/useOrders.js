@@ -14,10 +14,6 @@ export const useOrders = (shopId) => {
   const ongoingOrdersLoading = useSelector((state) => state.orders.ongoingOrdersLoading);
   const ongoingOrdersError = useSelector((state) => state.orders.ongoingOrdersError);
 
-  const completedOrders = useSelector((state) => state.orders.completedOrders);
-  const completedOrdersLoading = useSelector((state) => state.orders.completedOrdersLoading);
-  const completedOrdersError = useSelector((state) => state.orders.completedOrdersError);
-
   // Customer search state
   const customerSearch = useSelector((state) => state.orders.customerSearch);
 
@@ -40,14 +36,7 @@ export const useOrders = (shopId) => {
     dispatch(clearCustomerSearch());
   }, [dispatch]);
 
-  // Load all orders on mount
-  useEffect(() => {
-    if (shopId) {
-      fetchOrders('new');
-      fetchOrders('ongoing');
-      fetchOrders('completed');
-    }
-  }, [shopId, fetchOrders]);
+  // Removed initial useEffect - orders will be fetched when tabs are selected
 
   return {
     // Orders data
@@ -57,9 +46,6 @@ export const useOrders = (shopId) => {
     ongoingOrders,
     ongoingOrdersLoading,
     ongoingOrdersError,
-    completedOrders,
-    completedOrdersLoading,
-    completedOrdersError,
     
     // Customer search
     customerSearch,

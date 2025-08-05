@@ -1,5 +1,6 @@
 import React from 'react';
-import { Search, Loader2 } from 'lucide-react';
+import { Search } from 'lucide-react';
+import { LoadingSpinner } from '@/components';
 import { FormButton } from './index';
 
 export default function PhoneSearchInput({
@@ -25,7 +26,7 @@ export default function PhoneSearchInput({
             maxLength={10}
           />
           {loading ? (
-            <Loader2 className="absolute right-3 top-2.5 text-blue-500 w-5 h-5 animate-spin" />
+            <LoadingSpinner size="small" showMessage={false} className="absolute right-3 top-2.5" />
           ) : (
             <Search className="absolute right-3 top-2.5 text-blue-500 w-5 h-5" />
           )}

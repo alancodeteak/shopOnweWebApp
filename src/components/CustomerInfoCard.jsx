@@ -1,7 +1,7 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
 import { User, Phone, MapPin } from 'lucide-react';
-import AppSpinner from '@/components/AppSpinner';
+import { LoadingSpinner } from '@/components';
 import Card from '@/components/Card';
 import InfoRow from '@/components/InfoRow';
 
@@ -12,7 +12,7 @@ const CustomerInfoCard = React.memo(() => {
     const loading = useSelector((state) => state.orders.loading);
 
     if (loading) {
-        return <AppSpinner label="Loading customer info..." />;
+        return <LoadingSpinner size="medium" message="Loading customer info..." />;
     }
 
     return (

@@ -3,10 +3,13 @@ import { useSelector } from 'react-redux';
 import { Copy } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { useNavigate } from 'react-router-dom';
+import { ErrorBoundary, NetworkErrorHandler } from '@/components';
+import SupportModal from '@/components/SupportModal';
 
 export default function Profile() {
   const user = useSelector((state) => state.auth.user);
   const [copied, setCopied] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const navigate = useNavigate();
 
   if (!user) return <div className="text-center py-12 text-gray-500">No profile data found.</div>;
@@ -18,7 +21,9 @@ export default function Profile() {
   };
 
   return (
-    <div className="min-h-screen bg-blue-50 pt-16 pb-24">
+    <ErrorBoundary>
+      <NetworkErrorHandler>
+        <div className="min-h-screen bg-blue-50 pt-16 pb-24">
       <div className="max-w-screen-md mx-auto px-4">
         <PageHeader title="Profile" onBack={() => navigate(-1)} />
         <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md mx-auto mt-6">
@@ -56,12 +61,25 @@ export default function Profile() {
           </div>
         </div>
         
+        {/* Get Help & Support Button */}
+        <div className="flex flex-col items-center mt-8">
+          <button
+            className="bg-blue-500 text-white font-semibold px-4 py-2 rounded-lg shadow hover:bg-blue-600 transition"
+            onClick={() => setSupportOpen(true)}
+          >
+            Get Help & Support
+          </button>
+        </div>
         {/* Powered by Codeteak */}
         <div className="flex flex-col items-center mt-12 mb-4">
           <span className="text-xs text-blue-500 mb-1">Powered by</span>
           <img src="/assets/codeteak-logo.png" alt="Codeteak Logo" className="h-4 object-contain mt-1 md:mt-2" />
         </div>
       </div>
-    </div>
+        {/* Support Modal */}
+        <SupportModal open={supportOpen} onClose={() => setSupportOpen(false)} />
+        </div>
+      </NetworkErrorHandler>
+    </ErrorBoundary>
   );
 }

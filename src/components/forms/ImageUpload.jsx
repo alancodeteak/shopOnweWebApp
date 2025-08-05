@@ -106,7 +106,7 @@ export default function ImageUpload({
         </label>
       )}
       <div className="relative">
-        {console.log('🖼️ ImageUpload - value:', value, 'existingImageUrl:', existingImageUrl)}
+
         {(value || existingImageUrl) ? (
           <div className="relative">
             <img
@@ -114,10 +114,8 @@ export default function ImageUpload({
               alt="Preview"
               className={cn("w-full object-cover rounded-lg border-2 border-gray-200", previewHeight)}
               onError={(e) => {
-                console.log('🖼️ Image failed to load:', e.target.src);
-                console.log('🖼️ Trying to load from existingImageUrl:', existingImageUrl);
+                // Image failed to load
               }}
-              onLoad={() => console.log('🖼️ Image loaded successfully from:', value || existingImageUrl)}
             />
             {showRemoveButton && (
               <button

@@ -9,7 +9,7 @@ export default function FilterChips() {
   const availableFilters = useSelector((state) => state.orders.availableFilters);
 
   // Calculate total active filters
-  const totalActiveFilters = Object.values(activeFilters).reduce((sum, filters) => sum + filters.length, 0);
+  const totalActiveFilters = Object.values(activeFilters).reduce((sum, filters) => sum + (Array.isArray(filters) ? filters.length : 0), 0);
 
   if (totalActiveFilters === 0) {
     return null;
@@ -18,7 +18,7 @@ export default function FilterChips() {
   const getFilterLabel = (type, value) => {
     switch (type) {
       case 'deliveryPartners':
-        const partner = availableFilters.deliveryPartners.find(p => p.id === value || p.delivery_partner_id === value);
+        const partner = Array.isArray(availableFilters.deliveryPartners) ? availableFilters.deliveryPartners.find(p => p.id === value || p.delivery_partner_id === value) : null;
         return partner?.name || partner?.delivery_partner_name || value;
       case 'paymentModes':
         return value;
@@ -49,7 +49,7 @@ export default function FilterChips() {
   return (
     <div className="flex flex-wrap gap-2 mb-4">
       {Object.entries(activeFilters).map(([type, values]) =>
-        values.map((value) => (
+        Array.isArray(values) ? values.map((value) => (
           <div
             key={`${type}-${value}`}
             className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium"
@@ -65,7 +65,7 @@ export default function FilterChips() {
               <X className="w-3 h-3" />
             </button>
           </div>
-        ))
+        )) : null
       )}
     </div>
   );

@@ -12,6 +12,8 @@ import DeliveryPartnerCard from '@/components/DeliveryPartnerCard';
 import UrgencyBanner from '@/components/UrgencyBanner';
 import ErrorMessage from '@/components/ErrorMessage';
 import PageHeader from '@/components/PageHeader';
+import { ErrorBoundary, NetworkErrorHandler } from '@/components';
+import { isNetworkError, isServerError } from '@/utils/errorHandler';
 
 const AssignOrder = () => {
     const { id } = useParams();
@@ -41,13 +43,25 @@ const AssignOrder = () => {
         dispatch(fetchAvailablePartners());
     }, [dispatch]);
 
+    const handleRetryOrder = useCallback(() => {
+        dispatch(fetchOrderById(id));
+    }, [dispatch, id]);
+
     if (orderError) {
-      const errorInfo = typeof orderError === 'object' ? orderError : { message: orderError };
-      return <ErrorMessage message={errorInfo.message} />;
+      return (
+        <ErrorMessage 
+          message={orderError} 
+          isNetworkError={isNetworkError(orderError)}
+          isServerError={isServerError(orderError)}
+          onRetry={handleRetryOrder}
+        />
+      );
     }
 
     return (
-        <div className="bg-pink-50 min-h-screen pt-16 pb-24">
+        <ErrorBoundary>
+            <NetworkErrorHandler>
+                <div className="bg-pink-50 min-h-screen pt-16 pb-24">
             <div className="max-w-screen-md mx-auto px-4">
                 <PageHeader
                   title="Assign Order"
@@ -69,7 +83,9 @@ const AssignOrder = () => {
                     onRefresh={handleRefreshPartners}
                 />
             </main>
-        </div>
+                </div>
+            </NetworkErrorHandler>
+        </ErrorBoundary>
     );
 };
 

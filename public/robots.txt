@@ -1,0 +1,25 @@
+User-agent: *
+Disallow: /src/
+Disallow: /node_modules/
+Disallow: /.git/
+Disallow: /api/
+Disallow: /admin/
+Disallow: /config/
+Disallow: /logs/
+Disallow: /*.json
+Disallow: /*.map
+Disallow: /*.env
+Disallow: /package.json
+Disallow: /package-lock.json
+Disallow: /vite.config.js
+Disallow: /tailwind.config.js
+Disallow: /postcss.config.js
+Disallow: /eslint.config.js
+
+# Allow only public assets
+Allow: /assets/
+Allow: /public/
+Allow: /favicon.ico
+
+# Sitemap (if you have one)
+# Sitemap: https://yourdomain.com/sitemap.xml 

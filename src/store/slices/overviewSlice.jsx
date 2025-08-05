@@ -20,7 +20,36 @@ export const fetchOverview = createAsyncThunk(
         activePartners: raw.active_partners ?? 0,
       };
     } catch (err) {
-      return thunkAPI.rejectWithValue(err.response?.data?.message || 'Failed to fetch overview');
+      console.error('Error fetching overview:', err);
+      // Handle different types of errors
+      if (err.response?.status === 0 || err.message === 'Network Error') {
+        const message = 'Network error. Please check your internet connection.';
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          isNetworkError: true,
+          statusCode: 0
+        });
+      }
+      if (err.response?.status === 401) {
+        const message = 'Authentication failed. Please login again.';
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          statusCode: 401
+        });
+      }
+      if (err.response?.status === 403) {
+        const message = 'Access denied. You do not have permission to view analytics.';
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          statusCode: 403
+        });
+      }
+      const message = err.response?.data?.message || 'Failed to fetch overview';
+      return thunkAPI.rejectWithValue({ 
+        message, 
+        isServerError: err.response?.status >= 500,
+        statusCode: err.response?.status
+      });
     }
   }
 );

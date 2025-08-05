@@ -1,8 +1,10 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
-import AppSpinner from '@/components/AppSpinner';
+import { LoadingSpinner } from '@/components';
 import Card from '@/components/Card';
 import StatusBadge from '@/components/StatusBadge';
+import InfoRow from '@/components/InfoRow';
+import { Package, Calendar, Clock, DollarSign, MapPin } from 'lucide-react';
 
 const OrderDetailsCard = React.memo(({ orderId }) => {
     const order = useSelector((state) => state.orders.current);
@@ -10,7 +12,7 @@ const OrderDetailsCard = React.memo(({ orderId }) => {
     const loading = useSelector((state) => state.orders.loading);
 
     if (loading || !order || order.order_id !== Number(orderId)) {
-        return <AppSpinner label="Loading order details..." />;
+        return <LoadingSpinner size="medium" message="Loading order details..." />;
     }
 
     return (

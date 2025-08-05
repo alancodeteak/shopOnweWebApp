@@ -1,7 +1,7 @@
 import React from 'react';
 import { RefreshCw, Bike, AlertCircle, UserPlus } from 'lucide-react';
 import Card from '@/components/Card';
-import { getErrorInfo } from '@/utils/errorHandler';
+import { LoadingSpinner } from '@/components';
 
 const DeliveryPartnerCard = React.memo(({ partners, loading, error, onAssign, onRefresh }) => {
     return (
@@ -15,10 +15,7 @@ const DeliveryPartnerCard = React.memo(({ partners, loading, error, onAssign, on
 
             {loading && (
               <div className="flex items-center justify-center py-8">
-                <div className="text-center">
-                  <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">Loading available partners...</p>
-                </div>
+                <LoadingSpinner message="Loading available partners..." />
               </div>
             )}
             
@@ -67,7 +64,7 @@ const DeliveryPartnerCard = React.memo(({ partners, loading, error, onAssign, on
             
             {!loading && !error && (
               <div className="space-y-2 sm:space-y-3">
-                {partners && partners.length > 0 ? (
+                {Array.isArray(partners) && partners.length > 0 ? (
                   partners.map(partner => (
                     <div key={partner.delivery_partner_id} className="flex items-center justify-between p-2 sm:p-3 border rounded-lg">
                       <div className="flex items-center gap-2 sm:gap-4">

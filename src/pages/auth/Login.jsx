@@ -1,12 +1,15 @@
 // src/pages/Login.jsx
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useDispatch } from 'react-redux';
 import { loginSuccess, setUser } from '@/store/slices/authSlice';
 import API from '@/api/axios';
+import { setHmacSecret } from '@/utils/hmac.js';
 import { Eye, EyeOff } from 'lucide-react';
 import { X, Copy } from 'lucide-react';
+import { ErrorBoundary, NetworkErrorHandler } from '@/components';
+import SupportModal from '@/components/SupportModal';
 
 export default function Login() {
   const [userId, setUserId] = useState('');
@@ -24,6 +27,17 @@ export default function Login() {
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Check if user was redirected due to token expiration
+  useEffect(() => {
+    // Check if there's a token expiration indicator in the URL or localStorage
+    const wasTokenExpired = sessionStorage.getItem('tokenExpired');
+    if (wasTokenExpired) {
+      toast.info('Your session has expired. Please log in again.');
+      sessionStorage.removeItem('tokenExpired');
+    }
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -39,10 +53,33 @@ export default function Login() {
       });
       const token = response?.data?.data?.token;
       const user = response?.data?.data?.userDetails;
+      // Try multiple possible locations for HMAC secret
+      const hmacSecret = response?.data?.data?.userDetails?.hmac_secret || 
+                        response?.data?.data?.hmac_secret ||
+                        response?.data?.data?.userDetails?.hmacSecret ||
+                        response?.data?.data?.hmacSecret;
+      
       if (!token || !user) {
         toast.error('Invalid login response.');
         return;
       }
+      
+      // Store HMAC secret if provided
+      if (hmacSecret) {
+        setHmacSecret(hmacSecret);
+        if (import.meta.env.DEV) {
+          // Store in localStorage for debugging
+          localStorage.setItem('debug_hmac_secret', hmacSecret);
+          localStorage.setItem('debug_hmac_secret_length', hmacSecret.length.toString());
+          localStorage.setItem('debug_login_response', JSON.stringify(response?.data?.data));
+        }
+      } else if (import.meta.env.DEV) {
+        // Store debug info even when no secret
+        localStorage.setItem('debug_no_hmac_secret', 'true');
+        localStorage.setItem('debug_user_fields', JSON.stringify(Object.keys(user || {})));
+        localStorage.setItem('debug_login_response', JSON.stringify(response?.data?.data));
+      }
+      
       // Normalize to camelCase for frontend consistency
       const normalizedUser = {
         id: user.id,
@@ -65,7 +102,9 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-between bg-blue-500">
+    <ErrorBoundary>
+      <NetworkErrorHandler>
+        <div className="min-h-screen flex flex-col justify-between bg-blue-500">
       {/* Top Section: Logo and Illustration */}
       <div className="flex flex-col items-center pt-12 pb-4">
         {/* Yaadro Logo */}
@@ -136,60 +175,9 @@ export default function Login() {
         </form>
       </div>
       {/* Forgot Password Modal */}
-      {showForgotModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-xs mx-auto relative animate-fade-in">
-            <button
-              className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-xl"
-              onClick={() => setShowForgotModal(false)}
-              aria-label="Close"
-            >
-              <X className="w-6 h-6" />
-            </button>
-            <h2 className="text-lg font-bold text-blue-700 mb-2 text-center">Forgot Password?</h2>
-            <p className="text-gray-700 text-sm mb-4 text-center">Please contact the admin section.</p>
-            <div className="bg-blue-50 rounded-lg p-3 mb-2">
-              <div className="text-xs text-blue-700 font-semibold mb-1">Email</div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs text-blue-700">info@codeteak.com</span>
-                <button
-                  className="p-1 rounded hover:bg-blue-100 transition"
-                  onClick={() => handleCopy('info@codeteak.com', 'info')}
-                  title="Copy Email"
-                >
-                  <Copy className="w-4 h-4 text-blue-500" />
-                </button>
-                {copied === 'info' && <span className="text-green-600 text-xs ml-1">Copied!</span>}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-blue-700">yadro@codeteak.com</span>
-                <button
-                  className="p-1 rounded hover:bg-blue-100 transition"
-                  onClick={() => handleCopy('yadro@codeteak.com', 'yaadro')}
-                  title="Copy Email"
-                >
-                  <Copy className="w-4 h-4 text-blue-500" />
-                </button>
-                {copied === 'yaadro' && <span className="text-green-600 text-xs ml-1">Copied!</span>}
-              </div>
-            </div>
-            <div className="bg-blue-50 rounded-lg p-3">
-              <div className="text-xs text-blue-700 font-semibold mb-1">Phone</div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-blue-700">9995203149</span>
-                <button
-                  className="p-1 rounded hover:bg-blue-100 transition"
-                  onClick={() => handleCopy('9995203149', 'phone')}
-                  title="Copy Phone"
-                >
-                  <Copy className="w-4 h-4 text-blue-500" />
-                </button>
-                {copied === 'phone' && <span className="text-green-600 text-xs ml-1">Copied!</span>}
-              </div>
-            </div>
-          </div>
+      <SupportModal open={showForgotModal} onClose={() => setShowForgotModal(false)} />
         </div>
-      )}
-    </div>
+      </NetworkErrorHandler>
+    </ErrorBoundary>
   );
 }

@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { createOrder, clearCreatedOrder, fetchCustomerByPhone, clearCustomerSearch } from '@/store/slices/ordersSlice';
-import { toast } from 'react-toastify';
 import { Camera, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
 import PageContainer from '@/components/PageContainer';
+import ErrorMessage from '@/components/ErrorMessage';
+import { ErrorBoundary, NetworkErrorHandler } from '@/components';
 import { 
   FormInput, 
   FormTextarea, 
@@ -16,6 +17,8 @@ import {
   WaterNeedToggle,
   ImageUpload 
 } from '@/components/forms';
+import { isNetworkError, isServerError } from '@/utils/errorHandler';
+import toast from 'react-hot-toast';
 
 export default function CreateOrder() {
   const dispatch = useDispatch();
@@ -119,7 +122,7 @@ export default function CreateOrder() {
   // Update totalamount for each item
   const updateItemTotal = (idx) => {
     setItems((prev) =>
-      prev.map((item, i) =>
+      Array.isArray(prev) ? prev.map((item, i) =>
         i === idx
           ? {
               ...item,
@@ -129,16 +132,16 @@ export default function CreateOrder() {
                   : '',
             }
           : item
-      )
+      ) : []
     );
   };
 
   // Handle item field change
   const handleItemChange = (idx, field, value) => {
     setItems((prev) =>
-      prev.map((item, i) =>
+      Array.isArray(prev) ? prev.map((item, i) =>
         i === idx ? { ...item, [field]: value } : item
-      )
+      ) : []
     );
     if (field === 'quantity' || field === 'price') {
       setTimeout(() => updateItemTotal(idx), 0);
@@ -150,7 +153,7 @@ export default function CreateOrder() {
     setItems((prev) => [...prev, { item_name: '', quantity: '', price: '', totalamount: '' }]);
   };
   const removeItem = (idx) => {
-    setItems((prev) => prev.filter((_, i) => i !== idx));
+    setItems((prev) => Array.isArray(prev) ? prev.filter((_, i) => i !== idx) : []);
   };
 
   // Validation
@@ -161,14 +164,14 @@ export default function CreateOrder() {
     if (!address) errs.address = 'Address required';
     if (!billNo) errs.billNo = 'Bill number required';
     // If items exist, require at least one valid item
-    const validItems = items.filter(
+    const validItems = Array.isArray(items) ? items.filter(
       (item) =>
         item.item_name &&
         item.quantity &&
         item.price &&
         !isNaN(Number(item.quantity)) &&
         !isNaN(Number(item.price))
-    );
+    ) : [];
     if (items.length > 0 && validItems.length === 0) errs.items = 'Add at least one valid item or remove all items';
     // If no items, require manual total
     if (validItems.length === 0 && !totalAmount) errs.totalAmount = 'Total amount required';
@@ -181,14 +184,14 @@ export default function CreateOrder() {
     const errs = validate();
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
-    const validItems = items.filter(
+    const validItems = Array.isArray(items) ? items.filter(
       (item) =>
         item.item_name &&
         item.quantity &&
         item.price &&
         !isNaN(Number(item.quantity)) &&
         !isNaN(Number(item.price))
-    );
+    ) : [];
     const payload = {
       shop_id: shopId,
       bill_no: billNo,
@@ -207,12 +210,7 @@ export default function CreateOrder() {
       })) : [],
     };
     
-    // Debug: Log the water value being sent
-    console.log('🌊 Water Need Debug:', {
-      waterNeed: waterNeed,
-      water: waterNeed === 'Yes',
-      payload_water: payload.water
-    });
+    // Water value being sent
     // If bill image, use FormData
     if (billImage) {
       const formData = new FormData();
@@ -251,7 +249,9 @@ export default function CreateOrder() {
 
   // UI
   return (
-    <PageContainer background="bg-white">
+    <ErrorBoundary>
+      <NetworkErrorHandler>
+        <PageContainer background="bg-white">
       <PageHeader title="Add Order" onBack={() => navigate(-1)} />
       <form
         className="flex flex-col gap-3 w-full"
@@ -376,8 +376,23 @@ export default function CreateOrder() {
           Create Order
         </FormButton>
         
-        {error && <p className="text-red-500 text-xs mt-3 text-center">{error}</p>}
+        {error && (
+          <div className="mt-4">
+            <ErrorMessage 
+              message={error} 
+              isNetworkError={isNetworkError(error)}
+              isServerError={isServerError(error)}
+              onRetry={() => {
+                // Retry logic for create order would go here
+                // For now, just clear the error
+                setErrors({});
+              }}
+            />
+          </div>
+        )}
       </form>
-    </PageContainer>
+        </PageContainer>
+      </NetworkErrorHandler>
+    </ErrorBoundary>
   );
 }

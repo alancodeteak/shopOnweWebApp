@@ -1,18 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchOverview } from '@/store/slices/overviewSlice';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement } from 'chart.js';
+import { fetchItemAnalytics, addToSearchHistory } from '@/store/slices/itemAnalyticsSlice';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Filler } from 'chart.js';
 import { Doughnut, Line } from 'react-chartjs-2';
-import { ArrowLeft, RefreshCw, Box, Truck, Gauge, Clock, Users, XCircle, Camera } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Box, Truck, Gauge, Clock, Users, XCircle, Camera, Search, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
+import { LoadingSpinner, ErrorMessage, ErrorBoundary, NetworkErrorHandler } from '@/components';
+import { isNetworkError, isServerError } from '@/utils/errorHandler';
+import { calculateItemAnalytics, formatCurrency, formatQuantity } from '@/utils/itemAnalyticsUtils';
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement);
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Filler);
 
 const periodOptions = [
   { label: 'Today', value: 'today' },
-  { label: 'This Week', value: 'week' },
-  { label: 'This Month', value: 'month' },
+  { label: 'Week', value: 'week' },
+  { label: 'Month', value: 'month' },
 ];
 
 const cardIconBg = {
@@ -29,16 +33,34 @@ export default function Analytics() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { data, loading } = useSelector((state) => state.overview);
+  const { data: itemData, loading: itemLoading, error: itemError, searchHistory = [] } = useSelector((state) => state.itemAnalytics);
   const user = useSelector((state) => state.auth.user);
   const shopId = user?.shopId;
 
   const [period, setPeriod] = useState('month');
+  const [itemPeriod, setItemPeriod] = useState('today');
+  const [itemName, setItemName] = useState('');
 
   useEffect(() => {
     if (shopId) {
       dispatch(fetchOverview({ shopId, period }));
     }
   }, [dispatch, shopId, period]);
+
+  const handleItemSearch = () => {
+    if (shopId && itemName.trim()) {
+      dispatch(fetchItemAnalytics({ shopId, period: itemPeriod, itemName: itemName.trim() }));
+      dispatch(addToSearchHistory(itemName.trim()));
+    }
+  };
+
+  const handleItemRetry = () => {
+    if (shopId && itemName.trim()) {
+      dispatch(fetchItemAnalytics({ shopId, period: itemPeriod, itemName: itemName.trim() }));
+    }
+  };
+
+  const itemAnalytics = calculateItemAnalytics(itemData);
 
   // Donut chart data
   const donutData = {
@@ -82,14 +104,33 @@ export default function Analytics() {
     ],
   };
 
+  const handleRetry = () => {
+    if (shopId) {
+      dispatch(fetchOverview({ shopId, period }));
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-blue-500 pt-16 pb-24">
+    <ErrorBoundary>
+      <NetworkErrorHandler>
+        <div className="min-h-screen bg-blue-500 pt-16 pb-24">
       <div className="max-w-screen-md mx-auto px-4">
         <PageHeader
           title="Analytics Dashboard"
           onBack={() => navigate(-1)}
           onRefresh={() => dispatch(fetchOverview({ shopId, period }))}
         />
+
+        {/* Error Handling */}
+        {loading && <LoadingSpinner size="large" message="Loading analytics..." />}
+        {data?.error && (
+          <ErrorMessage 
+            message={data.error} 
+            isNetworkError={isNetworkError(data.error)}
+            isServerError={isServerError(data.error)}
+            onRetry={handleRetry}
+          />
+        )}
 
         {/* Filter Tabs */}
         <div className="flex justify-center gap-2 mb-4 mt-2">
@@ -107,6 +148,106 @@ export default function Analytics() {
               {opt.label}
             </button>
           ))}
+        </div>
+
+        {/* Item Analytics - Minimal */}
+        <div className="bg-white rounded-xl shadow p-4 mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Search className="w-5 h-5 text-blue-500" />
+            <span className="font-semibold text-gray-800">Item Search</span>
+          </div>
+          
+          {/* Compact Search Row */}
+          <div className="flex gap-2 mb-3">
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                placeholder="Enter item name..."
+                value={itemName}
+                onChange={(e) => setItemName(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleItemSearch()}
+                className="w-full pl-3 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              />
+            </div>
+            <select
+              value={itemPeriod}
+              onChange={(e) => setItemPeriod(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
+            >
+              {periodOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleItemSearch}
+              disabled={!itemName.trim() || itemLoading}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+            >
+              {itemLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : 'Go'}
+            </button>
+          </div>
+
+          {/* Quick Search History */}
+          {Array.isArray(searchHistory) && searchHistory.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-3">
+              {searchHistory.slice(0, 3).map((search, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    setItemName(search);
+                    setItemPeriod('today');
+                  }}
+                  className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+                >
+                  {search}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Results */}
+          {itemLoading && <div className="text-center py-4 text-gray-500 text-sm">Loading...</div>}
+          
+          {itemError && (
+            <div className="text-center py-4 text-red-500 text-sm">
+              {itemError}
+              <button onClick={handleItemRetry} className="ml-2 text-blue-500 hover:underline">Retry</button>
+            </div>
+          )}
+
+          {itemData && !itemLoading && !itemError && (
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Package className="w-4 h-4 text-blue-500" />
+                  <span className="font-medium text-gray-800 text-sm">{itemData.item_name}</span>
+                </div>
+                <span className="text-xs text-gray-500">{periodOptions.find(p => p.value === itemPeriod)?.label}</span>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center">
+                  <div className="text-lg font-bold text-gray-800">{itemAnalytics.count}</div>
+                  <div className="text-xs text-gray-600">Orders</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-gray-800">{formatQuantity(itemAnalytics.totalQuantity)}</div>
+                  <div className="text-xs text-gray-600">Qty</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-gray-800">{formatCurrency(itemAnalytics.calculatedTotalAmount)}</div>
+                  <div className="text-xs text-gray-600">Total</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!itemData && !itemLoading && !itemError && (
+            <div className="text-center py-4 text-gray-400 text-sm">
+              <Package className="w-8 h-8 mx-auto mb-1 text-gray-300" />
+              Search for item analytics
+            </div>
+          )}
         </div>
 
         {/* Summary Cards */}
@@ -208,6 +349,8 @@ export default function Analytics() {
             )}
           </div>
         </div>
+
+
         
         {/* Powered by Codeteak */}
         <div className="flex flex-col items-center mt-12 mb-4">
@@ -215,6 +358,8 @@ export default function Analytics() {
           <img src="/assets/codeteak-logo.png" alt="Codeteak Logo" className="h-4 object-contain mt-1 md:mt-2" />
         </div>
       </div>
-    </div>
+        </div>
+      </NetworkErrorHandler>
+    </ErrorBoundary>
   );
 } 
