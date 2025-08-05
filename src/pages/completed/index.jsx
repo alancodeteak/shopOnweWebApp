@@ -500,7 +500,7 @@ export default function CompletedOrders() {
                     <button
                       onClick={() => handleFilterChange('endDate', '')}
                       className="ml-1 hover:text-orange-900"
-                    >
+                    > 
                       <X className="w-3 h-3" />
                     </button>
                   </span>
