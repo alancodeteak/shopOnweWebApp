@@ -39,7 +39,6 @@ export const HMAC_CONFIG = {
     "/health",
     "/robots.txt",
     "/favicon.ico",
-    "/socket.io/",
     "/track/",
     "/orderbill/",
     "/images/",
