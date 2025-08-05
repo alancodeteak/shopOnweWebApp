@@ -493,7 +493,7 @@ export default function CompletedOrders() {
                       <X className="w-3 h-3" />
                     </button>
                   </span>
-                )}
+                )} 
                 {safeFilters.endDate && (
                   <span className="inline-flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm">
                     To: {new Date(safeFilters.endDate).toLocaleDateString()}
