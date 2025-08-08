@@ -3,6 +3,10 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { Filter, X, Calendar } from 'lucide-react';
 import OrderCard from '@/components/OrderCard';
+import OrdersTopTabs from '@/components/orders/OrdersTopTabs';
+import FilterActionBar from '@/components/orders/FilterActionBar';
+import OrdersTable from '@/components/orders/OrdersTable';
+import { createPortal } from 'react-dom';
 import { LoadingSpinner, ErrorMessage, EmptyState, ErrorBoundary, NetworkErrorHandler } from '@/components';
 import PageHeader from '@/components/PageHeader';
 import { OrderSearchInput } from '@/components/forms';
@@ -54,6 +58,22 @@ export default function OrdersList() {
   const [filtersInitialized, setFiltersInitialized] = useState(false);
   const [filteringOrders, setFilteringOrders] = useState(false);
   const [isUsingSearchAPI, setIsUsingSearchAPI] = useState(false);
+  const [itemsModal, setItemsModal] = useState(null);
+
+  // Debug fetch check for critical fields on first row
+  useEffect(() => {
+    if (Array.isArray(orders) && orders.length > 0) {
+      const o = orders[0];
+      // eslint-disable-next-line no-console
+      console.debug('[OrdersList] sample row:', {
+        address: o?.address,
+        order_at: o?.order_at || o?.created_at,
+        assigned_at: o?.assigned_at,
+        picked_up_at: o?.picked_up_at || o?.pack_time,
+        delivered_at: o?.delivered_at || o?.delivery_time,
+      });
+    }
+  }, [orders]);
 
   // Update hasMore based on pagination
   useEffect(() => {
@@ -287,23 +307,10 @@ export default function OrdersList() {
   return (
     <ErrorBoundary>
       <NetworkErrorHandler>
-        <div className="max-w-screen-md mx-auto px-4 pt-16 pb-24">
-      <PageHeader 
-        title="All Orders" 
-        onBack={() => navigate(-1)} 
-        onRefresh={handleRefresh}
-        isLoading={false}
-      />
-      
-      {/* Search Bar */}
-      <div className="mb-6">
-        <OrderSearchInput
-          value={searchQuery}
-          onChange={handleSearchChange}
-          onClear={handleSearchClear}
-          placeholder="Search by customer name, phone, or order ID..."
-        />
-      </div>
+        <div className="min-h-screen bg-[#F5F7FA] pt-16 pb-24">
+          <div className="max-w-[1440px] mx-auto px-6 space-y-4">
+            <OrdersTopTabs />
+            <FilterActionBar />
 
       {/* Filter Section */}
       <div className="mb-6">
@@ -525,143 +532,62 @@ export default function OrdersList() {
         )}
       </div>
 
-      {/* Error Display */}
-      {(error || deliveryPartnersError) && (
-        <ErrorMessage 
-          message={error || deliveryPartnersError} 
-          isNetworkError={isNetworkError(error || deliveryPartnersError)}
-          isServerError={isServerError(error || deliveryPartnersError)}
-          onRetry={handleRefresh}
-        />
-      )}
+            {/* Error Display */}
+            {(error || deliveryPartnersError) && (
+              <ErrorMessage 
+                message={error || deliveryPartnersError} 
+                isNetworkError={isNetworkError(error || deliveryPartnersError)}
+                isServerError={isServerError(error || deliveryPartnersError)}
+                onRetry={handleRefresh}
+              />
+            )}
 
-      {/* Orders List */}
-      {!error && !deliveryPartnersError && (
-        <>
-          {filteringOrders || loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <LoadingSpinner size="large" />
-                <p className="mt-4 text-lg font-semibold text-gray-700">
-                  {searchQuery ? 'Searching orders...' : 'Filtering orders...'}
-                </p>
-                <p className="mt-2 text-sm text-gray-500">
-                  Please wait while we find your orders
-                </p>
+            {/* Orders Table */}
+            {!error && !deliveryPartnersError && !filteringOrders && !loading && (
+              <OrdersTable 
+                orders={filteredOrders}
+                currentPage={pagination?.currentPage || 1}
+                totalPages={pagination?.totalPages || 1}
+                onPageChange={(p) => dispatch(setCurrentPage(p))}
+                isLoading={loading}
+              />
+            )}
+            {(filteringOrders || loading) && (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <LoadingSpinner size="large" />
+                  <p className="mt-4 text-lg font-semibold text-gray-700">
+                    {searchQuery ? 'Searching orders...' : 'Filtering orders...'}
+                  </p>
+                  <p className="mt-2 text-sm text-gray-500">Please wait while we find your orders</p>
+                </div>
               </div>
-            </div>
-          ) : filteredOrders.length > 0 ? (
-            <div className="space-y-4">
-              {filteredOrders.map((order) => (
-                <OrderCard 
-                  key={order.order_id} 
-                  order={order} 
-                  paymentVerifiedLabel={order.payment_verification === true || order.payment_verification === 'true'}
-                />
-              ))}
-              
-              {/* Pagination */}
-              {pagination && pagination.totalPages > 1 && (
-                <div className="flex justify-center py-4 px-2 sm:px-4">
-                  <div className="flex items-center space-x-2 sm:space-x-3">
-                    {/* Previous button */}
-                    <button
-                      onClick={() => dispatch(setCurrentPage(Math.max(1, currentPage - 1)))}
-                      disabled={currentPage === 1 || loading}
-                      className="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Prev
-                    </button>
-                    
-                    {/* Page numbers - Smart pagination */}
-                    {(() => {
-                      const totalPages = pagination.totalPages;
-                      const currentPageNum = currentPage;
-                      const pages = [];
-                      
-                      if (totalPages <= 7) {
-                        // Show all pages if 7 or fewer
-                        for (let i = 1; i <= totalPages; i++) {
-                          pages.push(i);
-                        }
-                      } else {
-                        // Smart pagination for more than 7 pages
-                        if (currentPageNum <= 4) {
-                          // Near the beginning: show 1,2,3,4,5,...,last
-                          for (let i = 1; i <= 5; i++) {
-                            pages.push(i);
-                          }
-                          pages.push('...');
-                          pages.push(totalPages);
-                        } else if (currentPageNum >= totalPages - 3) {
-                          // Near the end: show 1,...,last-4,last-3,last-2,last-1,last
-                          pages.push(1);
-                          pages.push('...');
-                          for (let i = totalPages - 4; i <= totalPages; i++) {
-                            pages.push(i);
-                          }
-                        } else {
-                          // In the middle: show 1,...,current-1,current,current+1,...,last
-                          pages.push(1);
-                          pages.push('...');
-                          pages.push(currentPageNum - 1);
-                          pages.push(currentPageNum);
-                          pages.push(currentPageNum + 1);
-                          pages.push('...');
-                          pages.push(totalPages);
-                        }
-                      }
-                      
-                      return pages.map((pageNum, index) => {
-                        if (pageNum === '...') {
-                          return (
-                            <span key={`ellipsis-${index}`} className="px-1 sm:px-2 text-gray-400 text-xs sm:text-sm">
-                              ...
-                            </span>
-                          );
-                        }
-                        
-                        return (
-                          <button
-                            key={pageNum}
-                            onClick={() => dispatch(setCurrentPage(pageNum))}
-                            disabled={loading}
-                            className={`px-1.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-md min-w-[28px] sm:min-w-[36px] ${
-                              currentPage === pageNum
-                                ? 'bg-blue-600 text-white'
-                                : 'text-gray-500 bg-white border border-gray-300 hover:bg-gray-50'
-                            } disabled:opacity-50 disabled:cursor-not-allowed`}
-                          >
-                            {pageNum}
-                          </button>
-                        );
-                      });
-                    })()}
-                    
-                    {/* Next button */}
-                    <button
-                      onClick={() => dispatch(setCurrentPage(Math.min(pagination.totalPages, currentPage + 1)))}
-                      disabled={currentPage === pagination.totalPages || loading}
-                      className="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Next
-                    </button>
+            )}
+            {itemsModal && createPortal(
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setItemsModal(null)}>
+                <div className="bg-white rounded-lg shadow-lg max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
+                  <div className="px-4 py-3 border-b flex justify-between items-center">
+                    <h3 className="font-semibold text-gray-800">Order Items</h3>
+                    <button className="text-gray-500 hover:text-gray-700" onClick={() => setItemsModal(null)}>✕</button>
+                  </div>
+                  <div className="p-4 max-h-80 overflow-auto">
+                    {Array.isArray(itemsModal) && itemsModal.length > 0 ? (
+                      <ul className="divide-y">
+                        {itemsModal.map((it, idx) => (
+                          <li key={idx} className="py-2 flex justify-between text-sm">
+                            <span className="font-medium text-gray-800">{it.item_name || 'Item'}</span>
+                            <span className="text-gray-600">{it.quantity} × ₹{it.price} = ₹{it.totalamount}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="text-sm text-gray-500">No items</div>
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
-          ) : (
-            <EmptyState
-              title={searchQuery || Object.values(safeFilters).some(v => v !== '') ? "No orders found" : "No orders"}
-              description={
-                searchQuery || Object.values(safeFilters).some(v => v !== '') 
-                  ? "Try adjusting your search or filters to find more orders."
-                  : "You don't have any orders yet."
-              }
-            />
-          )}
-        </>
-      )}
+              </div>, document.body)
+            }
+          </div>
         </div>
       </NetworkErrorHandler>
     </ErrorBoundary>

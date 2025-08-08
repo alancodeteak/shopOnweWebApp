@@ -1,22 +1,42 @@
 // Helper function to construct proper image URLs
 export const getImageUrl = (imagePath) => {
+  // Detailed logging for debugging
+  console.log('getImageUrl called with:', imagePath, 'type:', typeof imagePath);
+  
+  // Check if imagePath is null, undefined, or an empty string
   if (!imagePath) {
+    console.log('Image path is null or undefined');
+    return null;
+  }
+  
+  // Check if imagePath is an object (including empty objects)
+  if (typeof imagePath === 'object') {
+    console.log('Image path is an object:', JSON.stringify(imagePath));
+    return null;
+  }
+  
+  // Check if imagePath is an empty string
+  if (typeof imagePath === 'string' && imagePath.trim() === '') {
+    console.log('Image path is an empty string');
     return null;
   }
 
   // Handle AWS URLs and other full URLs
   if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    console.log('Using full URL:', imagePath);
     return imagePath;
   }
   
   // Handle relative paths that start with /
   if (imagePath.startsWith('/')) {
     const fullUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://yaadro.com/api'}${imagePath}`;
+    console.log('Constructed URL with leading slash:', fullUrl);
     return fullUrl;
   }
   
   // Handle relative paths without leading /
   const fullUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://yaadro.com/api'}/${imagePath}`;
+  console.log('Constructed URL without leading slash:', fullUrl);
   return fullUrl;
 };
 
@@ -82,4 +102,4 @@ export const createImageWithFallback = (src, alt, className, partnerName = '') =
     onError: (e) => handleImageError(e, fallbackSrc, partnerName),
     onLoad: () => {}
   };
-}; 
+};

@@ -21,6 +21,10 @@ export { default as Header } from './Header';
 export { default as Topbar } from './Topbar';
 export { default as Sidebar } from './Sidebar';
 export { default as UrgencyBanner } from './UrgencyBanner';
+// Orders (new desktop components)
+export { default as OrdersTopTabs } from './orders/OrdersTopTabs';
+export { default as FilterActionBar } from './orders/FilterActionBar';
+export { default as OrdersTable } from './orders/OrdersTable';
 
 // Card Components
 export { default as OrderCard } from './OrderCard';

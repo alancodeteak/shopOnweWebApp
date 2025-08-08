@@ -7,6 +7,8 @@ import { fetchPromotion, upsertPromotion, clearError, clearSuccess } from '@/sto
 import { toast } from 'react-hot-toast';
 import { LoadingSpinner, ErrorMessage, ErrorBoundary, NetworkErrorHandler } from '@/components';
 import { isNetworkError, isServerError } from '@/utils/errorHandler';
+import { decodeHtmlEntities } from '@/utils/security';
+import { getImageUrl } from '@/utils/imageUtils';
 
 export default function Promotions() {
   const navigate = useNavigate();
@@ -34,16 +36,35 @@ export default function Promotions() {
   // Populate form with existing data when promotion is loaded
   useEffect(() => {
     if (promotion) {
-      
-      
       setPromotionHeader(promotion.promotion_header || '');
       setPromotionContent(promotion.promotion_content || '');
-      setPromotionLink(promotion.promotion_link || '');
       
-      // Set existing image URL if available and no new image is selected
-      if (promotion.promotion_image && !promotionImage) {
-       
-        setPromotionImage(promotion.promotion_image);
+      // Decode HTML entities in the promotion link and remove any backticks
+      let decodedLink = decodeHtmlEntities(promotion.promotion_link || '');
+      decodedLink = decodedLink.replace(/`/g, '');
+      setPromotionLink(decodedLink);
+      
+      // Handle promotion image based on its type
+      console.log('Promotion image data:', promotion.promotion_image);
+      
+      if (promotion.promotion_image) {
+        if (typeof promotion.promotion_image === 'string' && promotion.promotion_image.trim() !== '') {
+          // Valid image URL string - let existingImageUrl handle displaying it
+          console.log('Valid image URL found:', promotion.promotion_image);
+          setPromotionImage(null);
+        } else if (typeof promotion.promotion_image === 'object') {
+          // Empty object - no image available
+          console.log('Empty image object detected');
+          setPromotionImage(null);
+        } else {
+          // Any other case - reset image
+          console.log('Invalid image data, resetting');
+          setPromotionImage(null);
+        }
+      } else {
+        // No image data at all
+        console.log('No image data found');
+        setPromotionImage(null);
       }
     }
   }, [promotion]); // Removed promotionImage dependency to avoid infinite loop
@@ -66,20 +87,36 @@ export default function Promotions() {
       return;
     }
 
+    // Clean the promotion link by removing any backticks
+    const cleanedLink = promotionLink ? promotionLink.replace(/`/g, '') : '';
+    console.log('Saving promotion with link:', cleanedLink);
+
     const formData = new FormData();
     formData.append('shop_id', shopId);
     formData.append('promotion_header', promotionHeader);
     formData.append('promotion_content', promotionContent);
-    formData.append('promotion_link', promotionLink);
+    formData.append('promotion_link', cleanedLink);
     
-    // Only append image if it's a File object (new upload)
+    // Handle image upload logic
     if (promotionImage && promotionImage instanceof File) {
+      // New image being uploaded
+      console.log('Uploading new image:', promotionImage.name);
       formData.append('promotion_image', promotionImage);
+    } else if (promotion?.promotion_image && typeof promotion.promotion_image === 'string' && promotion.promotion_image.trim() !== '') {
+      // Keep existing image - don't need to append anything as backend will preserve it
+      console.log('Keeping existing image:', promotion.promotion_image);
+      // Don't append anything - the backend will keep the existing image
+    } else {
+      // No image - explicitly set to empty string to clear any existing image
+      console.log('No image to upload or keep, clearing any existing image');
+      formData.append('promotion_image', '');
     }
 
     try {
-      await dispatch(upsertPromotion(formData)).unwrap();
+      const result = await dispatch(upsertPromotion(formData)).unwrap();
+      console.log('Promotion saved successfully:', result);
     } catch (err) {
+      console.error('Error saving promotion:', err);
       // Error is handled by the slice and displayed via toast
     }
   };
@@ -139,7 +176,11 @@ export default function Promotions() {
             onChange={setPromotionImage}
             onRemove={() => setPromotionImage(null)}
             className="mb-6"
-            existingImageUrl={promotion?.promotion_image || null}
+            existingImageUrl={
+              promotion?.promotion_image && typeof promotion.promotion_image === 'string' 
+                ? getImageUrl(promotion.promotion_image) 
+                : null
+            }
             aspectRatio={0.5}
             validate={true}
             maxWidth={853}
@@ -147,6 +188,20 @@ export default function Promotions() {
             minWidth={800}
             minHeight={1200}
           />
+          
+          {/* Debug info for image URL - will be removed in production */}
+          {promotion?.promotion_image && typeof promotion.promotion_image === 'string' && (
+            <div className="mb-6 text-xs text-gray-500">
+              <span className="font-semibold">Image URL:</span> {getImageUrl(promotion.promotion_image)}
+            </div>
+          )}
+          
+          {/* Debug info for promotion_image object */}
+          {promotion?.promotion_image && typeof promotion.promotion_image === 'object' && (
+            <div className="mb-6 text-xs text-gray-500">
+              <span className="font-semibold">Image data:</span> Empty object - no image available
+            </div>
+          )}
 
           {/* Header Field */}
           <FormInput
@@ -179,6 +234,13 @@ export default function Promotions() {
             type="url"
             className="mb-6"
           />
+          
+          {/* Display the decoded link for reference if it exists */}
+          {promotionLink && (
+            <div className="mb-6 text-xs text-gray-500">
+              <span className="font-semibold">Link Preview:</span> {promotionLink}
+            </div>
+          )}
 
           {/* Save Button */}
           <FormButton
@@ -202,4 +264,4 @@ export default function Promotions() {
       </NetworkErrorHandler>
     </ErrorBoundary>
   );
-} 
+}

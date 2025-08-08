@@ -22,6 +22,19 @@ export const sanitizeInput = (input) => {
     .replace(/\//g, '&#x2F;');
 };
 
+// Decode HTML entities (useful for displaying sanitized content)
+export const decodeHtmlEntities = (input) => {
+  if (typeof input !== 'string') return input;
+  
+  return input
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#x2F;/g, '/');
+};
+
 // Validate and sanitize URLs
 export const sanitizeUrl = (url) => {
   try {
@@ -155,4 +168,4 @@ export const disableDevTools = () => {
 // Initialize security measures
 if (typeof window !== 'undefined') {
   disableDevTools();
-} 
+}

@@ -34,8 +34,18 @@ export default function FormInput({
         <input
           type={type}
           placeholder={placeholder}
-          value={value}
-          onChange={onChange}
+          value={type === 'url' && value ? value.replace(/`/g, '') : value}
+          onChange={(e) => {
+            // For URL inputs, automatically remove backticks
+            if (type === 'url') {
+              const cleanedValue = e.target.value.replace(/`/g, '');
+              // Create a new event with the cleaned value
+              const newEvent = { ...e, target: { ...e.target, value: cleanedValue } };
+              onChange(newEvent);
+            } else {
+              onChange(e);
+            }
+          }}
           disabled={disabled}
           readOnly={readOnly}
           maxLength={maxLength}
@@ -55,4 +65,4 @@ export default function FormInput({
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
     </div>
   );
-} 
+}

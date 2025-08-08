@@ -114,10 +114,9 @@ export default function Login() {
       <div className="w-full flex-1 flex flex-col justify-end">
         <form
           onSubmit={handleLogin}
-          className="bg-white rounded-t-3xl shadow-lg px-6 pt-8 pb-8 w-full max-w-md mx-auto flex flex-col gap-4"
-          style={{ minHeight: '55vh' }}
+          className="bg-white rounded-t-3xl shadow-lg px-6 pt-6 pb-6 w-full max-w-md mx-auto flex flex-col gap-3"
         >
-          <h2 className="text-xl font-bold text-center mb-2 text-black">Log in</h2>
+          <h2 className="text-xl font-bold text-center mb-1 text-black">Log in</h2>
           <div>
             <label className="block text-sm font-semibold mb-1 text-gray-500">Shop Owner ID</label>
             <input
@@ -168,9 +167,9 @@ export default function Login() {
             {loading ? 'Logging in...' : 'Log in'}
           </button>
           {/* Powered by Codeteak inside card */}
-          <div className="flex flex-col items-center mt-8 mb-2">
+          <div className="flex flex-col items-center mt-4 mb-1">
             <span className="text-xs text-blue-500 mb-1">Powered by</span>
-            <img src="/assets/codeteak-logo.png" alt="Codeteak Logo" className="h-4 object-contain mt-1 md:mt-2" />
+            <img src="/assets/codeteak-logo.png" alt="Codeteak Logo" className="h-4 object-contain" />
           </div>
         </form>
       </div>

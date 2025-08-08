@@ -3,7 +3,7 @@ import { RefreshCw, Bike, AlertCircle, UserPlus } from 'lucide-react';
 import Card from '@/components/Card';
 import { LoadingSpinner } from '@/components';
 
-const DeliveryPartnerCard = React.memo(({ partners, loading, error, onAssign, onRefresh }) => {
+const DeliveryPartnerCard = React.memo(({ partners, loading, error, onAssign, onRefresh, isAssigning = false }) => {
     return (
         <Card>
             <div className="flex justify-between items-center mb-3 sm:mb-4">
@@ -14,8 +14,11 @@ const DeliveryPartnerCard = React.memo(({ partners, loading, error, onAssign, on
             </div>
 
             {loading && (
-              <div className="flex items-center justify-center py-8">
-                <LoadingSpinner message="Loading available partners..." />
+              <div className="flex items-center justify-center py-6">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-600">Loading partners...</p>
+                </div>
               </div>
             )}
             
@@ -78,10 +81,24 @@ const DeliveryPartnerCard = React.memo(({ partners, loading, error, onAssign, on
                       </div>
                       <button
                         onClick={() => onAssign(partner.delivery_partner_id)}
-                        className="flex items-center gap-1 sm:gap-2 bg-blue-100 text-blue-600 px-2 py-2 sm:px-4 sm:py-3 rounded-xl font-medium hover:bg-blue-200 text-xs sm:text-sm"
+                        disabled={isAssigning}
+                        className={`flex items-center gap-1 sm:gap-2 px-2 py-2 sm:px-4 sm:py-3 rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 ${
+                          isAssigning 
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                            : 'bg-blue-100 text-blue-600 hover:bg-blue-200 hover:scale-105'
+                        }`}
                       >
-                        <Bike size={14} className="sm:w-[18px] sm:h-[18px]" />
-                         assign order
+                        {isAssigning ? (
+                          <>
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-400"></div>
+                            <span>Assigning...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Bike size={14} className="sm:w-[18px] sm:h-[18px]" />
+                            <span>assign order</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   ))

@@ -123,13 +123,18 @@ API.interceptors.response.use(
   (error) => {
     // Handle token expiration (401 Unauthorized or 403 Forbidden)
     if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-      debug.warn('🔐 Token expired or invalid, logging out user');
+      // Don't auto-redirect for order creation - let the component handle it
+      const isOrderCreation = error.config?.url?.includes('/orders/create');
       
-      // Don't show error message to user, just handle logout
-      handleTokenExpiration();
-      
-      // Return a resolved promise to prevent error from bubbling up
-      return Promise.resolve({ data: { message: 'Token expired, redirecting to login...' } });
+      if (!isOrderCreation) {
+        debug.warn('🔐 Token expired or invalid, logging out user');
+        
+        // Don't show error message to user, just handle logout
+        handleTokenExpiration();
+        
+        // Return a resolved promise to prevent error from bubbling up
+        return Promise.resolve({ data: { message: 'Token expired, redirecting to login...' } });
+      }
     }
     
     // Handle other authentication-related errors

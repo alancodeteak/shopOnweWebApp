@@ -231,7 +231,8 @@ export default function CreateOrder() {
           dispatch(clearCreatedOrder());
           navigate(-1);
         } else {
-          toast.error(res.payload || 'Failed to create order');
+          const errorMessage = res.payload?.message || res.payload || 'Failed to create order';
+          toast.error(errorMessage);
         }
       });
     } else {
@@ -241,7 +242,8 @@ export default function CreateOrder() {
           dispatch(clearCreatedOrder());
           navigate(-1);
         } else {
-          toast.error(res.payload || 'Failed to create order');
+          const errorMessage = res.payload?.message || res.payload || 'Failed to create order';
+          toast.error(errorMessage);
         }
       });
     }

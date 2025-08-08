@@ -9,7 +9,6 @@ export default function ImageUpload({
   onRemove,
   error,
   className,
-  aspectRatio,
   maxSize = 5 * 1024 * 1024, // 5MB default
   accept = "image/*",
   previewHeight = "h-32",
@@ -17,10 +16,6 @@ export default function ImageUpload({
   required = false,
   existingImageUrl,
   validate = true,
-  maxWidth,
-  maxHeight,
-  minWidth,
-  minHeight,
   ...props
 }) {
   const [localError, setLocalError] = useState('');
@@ -44,39 +39,20 @@ export default function ImageUpload({
       return;
     }
 
-    // Validate image dimensions and aspect ratio if validation is enabled
+    // Validate image dimensions - fixed width of 853px and height of 1280px
     if (validate) {
       const img = new Image();
       img.onload = () => {
-        const fileAspectRatio = img.width / img.height;
         let hasError = false;
 
-        // Check aspect ratio if specified
-        if (aspectRatio) {
-          const tolerance = 0.1;
-          if (Math.abs(fileAspectRatio - aspectRatio) > tolerance) {
-            setLocalError(`Image should have a 1:${1/aspectRatio} aspect ratio (current: ${fileAspectRatio.toFixed(2)})`);
-            hasError = true;
-          }
-        }
-
-        // Check width constraints
-        if (minWidth && img.width < minWidth) {
-          setLocalError(`Image width should be at least ${minWidth}px (current: ${img.width}px)`);
+        // Check for fixed width of 853px and height of 1280px
+        if (img.width !== 853) {
+          setLocalError(`Image width must be exactly 853px (current: ${img.width}px)`);
           hasError = true;
         }
-        if (maxWidth && img.width > maxWidth) {
-          setLocalError(`Image width should be at most ${maxWidth}px (current: ${img.width}px)`);
-          hasError = true;
-        }
-
-        // Check height constraints
-        if (minHeight && img.height < minHeight) {
-          setLocalError(`Image height should be at least ${minHeight}px (current: ${img.height}px)`);
-          hasError = true;
-        }
-        if (maxHeight && img.height > maxHeight) {
-          setLocalError(`Image height should be at most ${maxHeight}px (current: ${img.height}px)`);
+        
+        if (img.height !== 1280) {
+          setLocalError(`Image height must be exactly 1280px (current: ${img.height}px)`);
           hasError = true;
         }
 
@@ -107,14 +83,26 @@ export default function ImageUpload({
       )}
       <div className="relative">
 
-        {(value || existingImageUrl) ? (
+        {(value || (existingImageUrl && typeof existingImageUrl === 'string' && existingImageUrl.trim() !== '')) ? (
           <div className="relative">
             <img
               src={value ? (typeof value === 'string' ? value : URL.createObjectURL(value)) : existingImageUrl}
               alt="Preview"
               className={cn("w-full object-cover rounded-lg border-2 border-gray-200", previewHeight)}
+              onLoad={(e) => {
+                console.log('Image loaded successfully:', e.target.src);
+              }}
               onError={(e) => {
-                // Image failed to load
+                console.error('Image failed to load:', e.target.src);
+                // Log additional debugging information
+                if (existingImageUrl) {
+                  console.log('Existing image URL type:', typeof existingImageUrl);
+                  console.log('Existing image URL value:', existingImageUrl);
+                }
+                // Replace with a more descriptive SVG for image not found
+                e.target.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%22100%22%20height%3D%22100%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23f0f0f0%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20font-family%3D%22Arial%22%20font-size%3D%2212%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%20fill%3D%22%23999%22%3EImage%20not%20found%3C%2Ftext%3E%3C%2Fsvg%3E';
+                // Also log the error to help with debugging
+                console.log('Using fallback image');
               }}
             />
             {showRemoveButton && (
@@ -131,18 +119,8 @@ export default function ImageUpload({
           <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition">
             <Camera className="w-8 h-8 text-gray-400 mb-2" />
             <span className="text-sm text-gray-500">Click to upload image</span>
-            {validate && aspectRatio && (
-              <span className="text-xs text-gray-400 mt-1">1:{1/aspectRatio} aspect ratio required</span>
-            )}
-            {validate && (minWidth || maxWidth || minHeight || maxHeight) && (
-              <span className="text-xs text-gray-400 mt-1">
-                {minWidth && maxWidth ? `${minWidth}-${maxWidth}px width` : 
-                 minWidth ? `min ${minWidth}px width` : 
-                 maxWidth ? `max ${maxWidth}px width` : ''}
-                {minHeight && maxHeight ? `, ${minHeight}-${maxHeight}px height` : 
-                 minHeight ? `, min ${minHeight}px height` : 
-                 maxHeight ? `, max ${maxHeight}px height` : ''}
-              </span>
+            {validate && (
+              <span className="text-xs text-gray-400 mt-1">Image must be exactly 853x1280px</span>
             )}
             <input
               type="file"
@@ -157,4 +135,4 @@ export default function ImageUpload({
       </div>
     </div>
   );
-} 
+}

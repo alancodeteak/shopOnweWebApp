@@ -331,9 +331,35 @@ export const createOrder = createAsyncThunk(
       return res.data.data;
     } catch (err) {
       console.error('🌊 Error creating order:', err);
-      return thunkAPI.rejectWithValue(
-        err?.response?.data?.message || "Failed to create order"
-      );
+      // Handle different types of errors
+      if (err.response?.status === 0 || err.message === 'Network Error') {
+        const message = 'Network error. Please check your internet connection.';
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          isNetworkError: true,
+          statusCode: 0
+        });
+      }
+      if (err.response?.status === 401) {
+        const message = 'Authentication failed. Please login again.';
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          statusCode: 401
+        });
+      }
+      if (err.response?.status === 403) {
+        const message = 'Access denied. You do not have permission to create orders.';
+        return thunkAPI.rejectWithValue({ 
+          message, 
+          statusCode: 403
+        });
+      }
+      const message = err.response?.data?.message || "Failed to create order";
+      return thunkAPI.rejectWithValue({ 
+        message, 
+        isServerError: err.response?.status >= 500,
+        statusCode: err.response?.status
+      });
     }
   }
 );
@@ -433,6 +459,12 @@ const initialState = {
   completedOrdersLoading: false,
   completedOrdersError: null,
   completedOrdersPagination: null,
+  // Date filter state
+  dateFilter: {
+    startDate: null,
+    endDate: null,
+    isToday: false,
+  },
   // Dedicated loading flag for urgency
   urgencyLoading: false,
   updateCustomerAddressLoading: false,
@@ -533,6 +565,30 @@ const ordersSlice = createSlice({
       if (state.pagination) {
         state.pagination.currentPage = 1;
       }
+    },
+    // Date filter actions
+    setDateFilter: (state, action) => {
+      const { startDate, endDate, isToday } = action.payload;
+      state.dateFilter.startDate = startDate !== undefined ? startDate : state.dateFilter.startDate;
+      state.dateFilter.endDate = endDate !== undefined ? endDate : state.dateFilter.endDate;
+      state.dateFilter.isToday = isToday !== undefined ? isToday : state.dateFilter.isToday;
+    },
+    clearDateFilter: (state) => {
+      state.dateFilter = {
+        startDate: null,
+        endDate: null,
+        isToday: false,
+      };
+    },
+    setTodayFilter: (state) => {
+      const today = new Date().toISOString().split('T')[0];
+      console.log('🗓️ Setting today filter:', today);
+      state.dateFilter = {
+        startDate: today,
+        endDate: today,
+        isToday: true,
+      };
+      console.log('📅 Updated dateFilter state:', state.dateFilter);
     },
   },
   extraReducers: (builder) => {
@@ -670,7 +726,7 @@ const ordersSlice = createSlice({
       })
       .addCase(createOrder.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload || "Failed to create order";
+        state.error = action.payload?.message || action.payload || "Failed to create order";
       })
 
       // Assign Order
@@ -727,9 +783,11 @@ const ordersSlice = createSlice({
       })
       .addCase(fetchOrdersByStatus.fulfilled, (state, action) => {
         const { status, data, page } = action.payload;
+        console.log('📊 fetchOrdersByStatus fulfilled:', { status, dataLength: data?.length });
         if (status === 'new') {
           state.newOrdersLoading = false;
           state.newOrders = data;
+          console.log('🆕 New orders sample:', data?.[0]);
         } else if (status === 'ongoing') {
           state.ongoingOrdersLoading = false;
           state.ongoingOrders = data;
@@ -853,7 +911,10 @@ export const {
   setUIFilter,
   clearUIFilters,
   setCurrentPage,
-  resetPagination
+  resetPagination,
+  setDateFilter,
+  clearDateFilter,
+  setTodayFilter
 } = ordersSlice.actions;
 
 export default ordersSlice.reducer;

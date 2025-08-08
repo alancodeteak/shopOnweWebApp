@@ -6,6 +6,9 @@ import OrderDetails from "../pages/orders/Details";
 import CreateOrder from "../pages/orders/Create";
 import AssignOrder from "../pages/orders/AssignOrder";
 import AssignSuccess from "../pages/orders/AssignSuccess";
+import NewOrders from "../pages/orders/NewOrders";
+import OngoingOrders from "../pages/orders/OngoingOrders";
+import TicketsPage from "../pages/tickets";
 import DeliveryPartnerList from "../pages/deliveryPartners/List";
 import CreateDeliveryPartner from "../pages/deliveryPartners/Create";
 import DeliveryPartnerDetails from "../pages/deliveryPartners/Details";
@@ -27,6 +30,9 @@ const router = createBrowserRouter([
     children: [
       { path: "dashboard", element: <Dashboard /> },
       { path: "dashboard/analytics", element: <Analytics /> },
+      { path: "orders/new", element: <NewOrders /> },
+      { path: "orders/ongoing", element: <OngoingOrders /> },
+      { path: "tickets", element: <TicketsPage /> },
       { path: "orders", element: <OrdersList /> },
       { path: "orders/:id", element: <OrderDetails /> },
       { path: "orders/create", element: <CreateOrder /> },

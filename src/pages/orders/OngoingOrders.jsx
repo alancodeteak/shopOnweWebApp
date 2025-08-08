@@ -1,51 +1,48 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { OrdersTopTabs, FilterActionBar, OrdersTable, ErrorBoundary, NetworkErrorHandler, LoadingSpinner, ErrorMessage } from '@/components';
+import OrdersTopTabs from '@/components/orders/OrdersTopTabs';
+import FilterActionBar from '@/components/orders/FilterActionBar';
+import OrdersTable from '@/components/orders/OrdersTable';
+import { createPortal } from 'react-dom';
+import { ErrorBoundary, NetworkErrorHandler, LoadingSpinner, ErrorMessage } from '@/components';
 import { fetchOrdersByStatus } from '@/store/slices/ordersSlice';
 import { isNetworkError, isServerError } from '@/utils/errorHandler';
-import { createPortal } from 'react-dom';
 
-export default function CompletedOrders() {
+export default function OngoingOrders() {
+  const [itemsModal, setItemsModal] = useState(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
   const dispatch = useDispatch();
   const shopId = useSelector((s) => s.auth.user?.shopId);
-  const orders = useSelector((s) => s.orders.completedOrders) || [];
-  const loading = useSelector((s) => s.orders.completedOrdersLoading);
-  const error = useSelector((s) => s.orders.completedOrdersError);
-  const completedPagination = useSelector((s) => s.orders.completedOrdersPagination) || { page: 1, totalPages: 1 };
-
-  const [itemsModal, setItemsModal] = useState(null);
+  const orders = useSelector((s) => s.orders.ongoingOrders) || [];
+  const loading = useSelector((s) => s.orders.ongoingOrdersLoading);
+  const error = useSelector((s) => s.orders.ongoingOrdersError);
 
   useEffect(() => {
     if (shopId) {
-      dispatch(fetchOrdersByStatus({ shopId, status: 'completed' }));
+      dispatch(fetchOrdersByStatus({ shopId, status: 'ongoing' }));
     }
   }, [dispatch, shopId]);
 
-  // Debug fetch check for critical fields on first row
+  // Reset local page if data length shrinks
   useEffect(() => {
-    if (Array.isArray(orders) && orders.length > 0) {
-      const o = orders[0];
-      // eslint-disable-next-line no-console
-      console.debug('[CompletedOrders] sample row:', {
-        address: o?.address,
-        delivery_partner_id: o?.delivery_partner_id,
-        delivered_at: o?.delivered_at || o?.delivery_time,
-        payment_mode: o?.payment_mode,
-        payment_status: o?.payment_status,
-      });
-    }
-  }, [orders]);
+    const totalPages = Math.max(1, Math.ceil((orders?.length || 0) / pageSize));
+    if (page > totalPages) setPage(1);
+  }, [orders, page, pageSize]);
+
+  const visibleOrders = useMemo(() => {
+    if (!Array.isArray(orders)) return [];
+    const start = (page - 1) * pageSize;
+    return orders.slice(start, start + pageSize);
+  }, [orders, page]);
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil((orders?.length || 0) / pageSize)), [orders]);
 
   useEffect(() => {
     const handler = (e) => setItemsModal(Array.isArray(e.detail) ? e.detail : []);
     window.addEventListener('orders:showItems', handler);
     return () => window.removeEventListener('orders:showItems', handler);
   }, []);
-
-  const handleCompletedPageChange = (pageNum) => {
-    if (!shopId) return;
-    dispatch(fetchOrdersByStatus({ shopId, status: 'completed', page: pageNum, limit: 20 }));
-  };
 
   return (
     <ErrorBoundary>
@@ -54,27 +51,25 @@ export default function CompletedOrders() {
           <div className="max-w-[1440px] mx-auto px-6 space-y-4">
             <OrdersTopTabs />
             <FilterActionBar />
-
-            {loading && <LoadingSpinner size="large" message="Loading completed orders..." />}
+            {loading && <LoadingSpinner size="large" message="Loading ongoing orders..." />}
             {error && (
               <ErrorMessage
                 message={error}
                 isNetworkError={isNetworkError(error)}
                 isServerError={isServerError(error)}
-                onRetry={() => dispatch(fetchOrdersByStatus({ shopId, status: 'completed' }))}
+                onRetry={() => dispatch(fetchOrdersByStatus({ shopId, status: 'ongoing' }))}
               />
             )}
-
             {!loading && !error && (
               <OrdersTable 
-                orders={orders}
-                currentPage={completedPagination.page || 1}
-                totalPages={completedPagination.totalPages || 1}
-                onPageChange={handleCompletedPageChange}
+                orders={visibleOrders} 
+                mode="ongoing" 
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
                 isLoading={loading}
               />
             )}
-
             {itemsModal && createPortal(
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setItemsModal(null)}>
                 <div className="bg-white rounded-lg shadow-lg max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
@@ -105,3 +100,5 @@ export default function CompletedOrders() {
     </ErrorBoundary>
   );
 }
+
+
